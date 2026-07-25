@@ -13,11 +13,13 @@ def build_scenario(config): #monta um cenario completo a partir da scenarioconfi
 
     world = World(config.world_width, config.world_height)
 
-    water_x = config.world_width - 5
-    food_x = config.world_width -2
-    mid_y = config.world_height // 2
-    world.set_tile(water_x, mid_y, WATER)
-    world.set_tile(food_x, mid_y, FOOD)
+    water_x = random.randint(0, config.world_width -1) 
+    water_y = random.randint(0, config.world_height -1)
+    world.set_tile(water_x, water_y, WATER)
+
+    food_x = random.randint(0, config.world_width -1)
+    food_y = random.randint(0, config.world_height -1)
+    world.set_tile(food_x, food_y, FOOD) 
 
     for i in range(config.num_organism):
         x = random.randint(0, config.world_width -1)
