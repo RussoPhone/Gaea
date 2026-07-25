@@ -36,30 +36,6 @@ class Simulation: #È aqui que fica os parametros da simulação.
     def process_entity(self, entity):
         if not isinstance(entity, Organism):
             return
-        entity.update(self.world)
-        perception = self.perceive(entity)
-
-        if entity.needs_action():
-            state_before = self.capture_state(entity)
-            reason = self.body_reason(entity)
-
-            action = self.decide_action(entity, perception)
-            applied = self.act(entity, action)
-            entity.record_action(applied)
-            self.environment_system.apply(self, entity)
-
-            state_after = self.capture_state(entity)
-
-            event = Event(
-                tick = self.gtime.mtk, actor=entity.name, action=applied,
-                reason=reason, state_before=state_before, state_after=state_after,
-            )
-            self.event_log.record(event)
-        else:
-            self.environment_system.apply(self, entity)
-    def process_entity(self, entity):
-        if not isinstance(entity, Organism):
-            return
 
         entity.update(self.world)
 
@@ -77,6 +53,8 @@ class Simulation: #È aqui que fica os parametros da simulação.
         return None
 
     def decide_action(self, entity, perception):
+        if entity.decision_system is not None:
+            return entity.decision_system.decide(entity, perception)
         return [
             (1, 0),
             (-1, 0),
