@@ -1,8 +1,11 @@
 import os
+import sys 
 import time
 from core.being.organism import Organism
 from core.ambient.tile import WATER, FOOD, GRASS
 from core.systems.environment_system import EnvironmentSystem
+from core.simulation.event import Event 
+from core.simulation.event_log import EventLog
 class Simulation: #È aqui que fica os parametros da simulação.
     def __init__(self, world, sky, renderer, gtime, simulation_duration=120, frame_delay=0.05):
         self.world = world
@@ -12,11 +15,47 @@ class Simulation: #È aqui que fica os parametros da simulação.
         self.simulation_duration = simulation_duration
         self.frame_delay = frame_delay
         self.environment_system = EnvironmentSystem()
+        self.event_log = EventLog() 
 
+ 
 
-    def clear_screen(self): #Limpa a tela
+    def _build_frame(self):
+        linhas = [self.gtime.debug_text(), ""]
+
+        light = self.sky.get_light(self.gtime)
+        linhas.append(f"Light: {light}")
+        linhas.append("")
+
+        for entity in self.world.entities:
+            linhas.append(entity.debug_text())
+            if entity.needs_action():
+                linhas.append(f"{entity.name} needs_action")
+            linhas.append("")
+
+        linhas.append(self.renderer.render_lit(self.world, light))
+        return "\n".join(linhas)
+
         os.system("cls" if os.name == "nt" else "clear")
+    def log_event(self, entity_name, action, reason, before, after, context=None):
+        #monta e guarda um Event. usa o tick fechado get_tk()).
+        self.event_log.record(Event(
+            tick=self.gtime.get_tk(),
+            entity_name=entity_name,
+            action=action,
+            reason=reason,
+            before=before,
+            after=after,
+            context=context or {},
+        ))
     
+    def death_reason(self, state):
+        fome = state["hunger"] >= 100
+        sede = state["thirst"] >= 100
+        if fome and sede: return "fome e sede"
+        elif fome: return "fome"
+        elif sede: return "sede"
+        return "desconhecido"
+
     def capture_state(self, entity):
         return {
             "x": entity.x, "y": entity.y,
@@ -36,18 +75,65 @@ class Simulation: #È aqui que fica os parametros da simulação.
     def process_entity(self, entity):
         if not isinstance(entity, Organism):
             return
+        was_alive = entity.body.alive 
+        before_update = self.capture_state(entity)
 
         entity.update(self.world)
 
+        if was_alive and not entity.body.alive:
+            after_update = self.capture_state(entity)
+            self.log_event(
+                entity_name=entity.name, 
+                action="morreu",
+                reason=self.death_reason(after_update),
+                before=before_update,
+                after=after_update,
+                context={"posicao": (entity.x, entity.y)},
+            )
+            return 
+        if not entity.body.alive:
+            return 
         perception = self.perceive(entity)
 
         if entity.needs_action():
+            reason = self.body_reason(entity)
+            before_action = self.capture_state(entity)
+
             action = self.decide_action(entity, perception)
-
             applied = self.act(entity, action)
-
             entity.record_action(applied)
+
+            after_action = self.capture_state(entity)
+
+            self.log_event(
+                entity_name=entity.name,
+                action=applied,
+                reason=reason,
+                before=before_action,
+                after=after_action,
+                context={"tile": self.world.get_tile(entity.x, entity.y).tile_type},
+            )
+        tile_before = self.world.get_tile(entity.x, entity.y)
+        body_before = self.capture_state(entity)
+
         self.environment_system.apply(self, entity)
+
+        tile_after = self.world.get_tile(entity.x, entity.y)
+        body_after = self.capture_state(entity)
+
+        if body_before["hunger"] != body_after["hunger"] or body_before["thirst"] != body_after["thirst"]:
+        #uma causa, um evento. 
+         self.log_event(
+            entity_name=entity.name,
+            action="consumiu_recurso",
+            reason=tile_before.tile_type,
+            before=body_before,
+            after=body_after,
+            context={"tile_antes": tile_before.tile_type, "tile_depois": tile_after.tile_type},
+        )
+
+
+
 
     def perceive(self, entity):
         return None
@@ -70,33 +156,54 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
 
     def step(self):
+        fase_antes = self.sky.get_state(self.gtime)
+        luz_antes = self.sky.get_light(self.gtime)
+
         for entity in self.world.entities:
             self.process_entity(entity)
 
         self.gtime.adv()
 
-    def run(self, render_enabled=True):
+        fase_depois = self.sky.get_state(self.gtime)
+        luz_depois = self.sky.get_light(self.gtime)
+
+        if fase_antes != fase_depois:
+            self.log_event(
+                entity_name="ceu",
+                action="mudou_fase",
+                reason="ciclo natural",
+                before={"fase": fase_antes, "luz": round(luz_antes, 2)},
+                after={"fase": fase_depois, "luz": round(luz_depois, 2)},
+                context={"mtk": self.gtime.mtk},
+            )
+    
+    def advance_one(self, render_enabled=False):
+        if self.gtime.mtk >= self.simulation_duration:
+            return False
+        self.step()
+
+        if render_enabled:
+            self.render()
+
+        return True
+
+    def run(self, render_enabled=True, steps_per_frame=1):
+        #steps_per_frame=1 aceleração. Roda diversos ticks entre cada frame redenrizado.
         while self.gtime.mtk < self.simulation_duration:
-            self.step()
+            for _ in range(steps_per_frame):
+                if self.gtime.mtk >= self.simulation_duration:
+                    break 
+                self.step()
 
             if render_enabled:
-                self.clear_screen()
                 self.render()
                 time.sleep(self.frame_delay)
 
 
     def render(self):
-        print(self.gtime.debug_text())
-        print()
-        #calcula a luz atual a partir do tempo
-        light = self.sky.get_light(self.gtime)
-        #mostra o valor da luz
-        print(f"Light: {light}")
-        print()
-        for entity in self.world.entities:
-            print(entity.debug_text())
-            if entity.needs_action():
-                print(f"{entity.name} needs action")
-            print()
-        #desenha o mundo + luz atual
-        print(self.renderer.render_lit(self.world, light))
+        
+        frame = self._build_frame()
+        sys.stdout.write("\033[H\033[J")
+        sys.stdout.write(frame + "\n")
+        sys.stdout.flush()
+
