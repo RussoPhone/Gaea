@@ -1,8 +1,8 @@
 from core.simulation.config import ScenarioConfig
 from core.simulation.scenario import build_scenario
-
+from core.simulation.interactive_runner import InteractiveRunner
 config = ScenarioConfig(
-    seed =42,
+    seed =76,
     world_width=20,
     world_height=10,
     num_organism=10,
@@ -11,5 +11,7 @@ config = ScenarioConfig(
 )
 
 simulation = build_scenario(config)
-simulation.run()
-#Semana 1 concluida!
+runner = InteractiveRunner(simulation)
+
+runner.loop()
+#Semana 2 concluida!
