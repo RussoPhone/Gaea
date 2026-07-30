@@ -3,13 +3,14 @@ class Body:
         self.hunger = 0
         self.thirst = 0
         self.alive = True
+        
 
     def update_needs(self):
         if not self.alive:
             return
 
-        self.hunger += 1
-        self.thirst += 2
+        self.hunger += 0.05
+        self.thirst += 0.1 
 
         if self.hunger >= 100 or self.thirst >= 100:
             self.alive = False
