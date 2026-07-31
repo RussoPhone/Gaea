@@ -18,15 +18,15 @@ class Body:
     def drink(self): #função de consumir liquido.
         if not self.alive:
             return
-        self.thirst -= 30
+        self.thirst -= 10
 
         if self.thirst < 0:
             self.thirst = 0
-
+ 
     def eat(self):
         if not self.alive:
             return
-        self.hunger -=30
+        self.hunger -= 5
 
         if self.hunger < 0:
             self.hunger = 0
