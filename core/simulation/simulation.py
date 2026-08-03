@@ -2,8 +2,11 @@ import os
 import sys 
 import time
 from core.being.organism import Organism
+from core.sense.perception import Perception
+from core.sense.spatial import Spatial 
 from core.ambient.tile import WATER, FOOD, GRASS
 from core.systems.environment_system import EnvironmentSystem
+from core.systems.affordance_system import AffordanceSystem
 from core.simulation.event import Event 
 from core.simulation.event_log import EventLog
 class Simulation: #È aqui que fica os parametros da simulação.
@@ -15,6 +18,7 @@ class Simulation: #È aqui que fica os parametros da simulação.
         self.simulation_duration = simulation_duration
         self.frame_delay = frame_delay
         self.environment_system = EnvironmentSystem()
+        self.affordance_system = AffordanceSystem()
         self.event_log = EventLog() 
 
  
@@ -136,21 +140,40 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
 
     def perceive(self, entity):
-        return None
+        if getattr(entity, "sensor", None) is None:
+            return None
+        percepcao = Perception()
+        luz = self.sky.get_light(self.gtime)
+        alcance = entity.sensor.range
+
+        for ddx in range(-alcance, alcance +1):
+            for ddy in range(-alcance, alcance +1):
+                if ddx == 0 and ddy == 0:
+                    continue
+
+                tx, ty = entity.x + ddx, entity.y + ddy
+                if not self.world.is_inside(tx, ty):
+                    continue 
+
+                spatial = Spatial(entity.x, entity.y, tx, ty)
+                if not entity.sensor.can_perceive(spatial, entity.orientation, luz):
+                    continue
+
+                tile = self.world.get_tile(tx, ty)
+                ocupado = self.world.get_entity_at(tx, ty) is not None
+                percepcao.add(Spatial, tile, ocupado)
+        return percepcao
 
     def decide_action(self, entity, perception):
         if entity.decision_system is not None:
             return entity.decision_system.decide(entity, perception)
-        return [
-            (1, 0),
-            (-1, 0),
-            (0, 1),
-            (0, -1),
-            ]
+        return self.affordance_system.legal_actions(self.world, entity)
 
     def act(self, entity, directions):
         for dx, dy in directions:
             if self.world.move_entity(entity, dx, dy):
+                if (dx, dy) != (0, 0):
+                    entity.orientation = (dx, dy)
                 return f"moved ({dx}, {dy})"
         return "tried to move"
 
@@ -189,9 +212,9 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
     def run(self, render_enabled=True, steps_per_frame=1):
         #steps_per_frame=1 aceleração. Roda diversos ticks entre cada frame redenrizado.
-        while self.gtime.mtksptk < self.simulation_duration:
+        while self.gtime.mtk < self.simulation_duration:
             for _ in range(steps_per_frame):
-                if self.gtime.mtksptk >= self.simulation_duration:
+                if self.gtime.mtk >= self.simulation_duration:
                     break 
                 self.step()
 
