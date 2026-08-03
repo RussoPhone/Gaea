@@ -3,8 +3,9 @@ from dataclasses import dataclass
 @dataclass
 class ScenarioConfig: #Config central de um cenario de simulação
     seed: int = 42
-    num_water_tiles = 15
-    num_food_tiles = 10
+    num_water_tiles: int = 15
+    num_food_tiles: int = 10
+    num_stone_tiles: int = 8
     world_width: int = 30
     world_height: int = 20
     num_organism: int = 10
