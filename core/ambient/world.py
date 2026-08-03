@@ -92,12 +92,7 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
         new_x = entity.x + dx
         new_y = entity.y + dy
 
-        if not self.is_inside(new_x, new_y):
-            return False
-
-        target_entity = self.get_entity_at(new_x, new_y)
-
-        if target_entity is not None and target_entity is not entity:
+        if not self.is_passable(new_x, new_y, ignore_entity=entity):
             return False
 
         entity.x = new_x
@@ -105,4 +100,13 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
 
         return True
 
-
+    def is_passable(self, x, y, ignore_entity=None):
+        if not self.is_inside(x, y):
+            return False
+        tile = self.get_tile(x, y)
+        if tile.blocking:
+            return False
+        ocupante = self.get_entity_at(x, y)
+        if ocupante is not None and ocupante is not ignore_entity:
+            return False
+        return True 
