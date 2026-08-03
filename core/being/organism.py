@@ -3,14 +3,15 @@ from core.being.body import Body
 
 
 class Organism(Entity):
-    def __init__(self, name, symbol, x, y, perception=None, decision=None, memory=None):
+    def __init__(self, name, symbol, x, y, sensor=None, decision=None, memory=None):
         super().__init__(name, symbol, x, y)
 
         self.body = Body() #Necessidades, vida e morte
         self.memory = memory #padrões aprendido, inc futuro
         self.decision_system = decision #escolha de ação, inc futura
-        self.perception = perception
-
+        self.sensor = sensor 
+        self.orientation = (0, -1)
+    
     def update(self, world):
         if not self.body.alive:
             self.record_action("dead")
