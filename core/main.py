@@ -1,7 +1,7 @@
-from core.simulation.config import ScenarioConfig
+from simulation.config import ScenarioConfig
 from toys.toy001_survival_instinct.naive_policy import NaivePolicy
-from core.simulation.scenario import build_scenario
-from core.simulation.interactive_runner import InteractiveRunner
+from simulation.scenario import build_scenario
+from simulation.interactive_runner import InteractiveRunner
 config = ScenarioConfig(
     seed =67,
     world_width=20,
