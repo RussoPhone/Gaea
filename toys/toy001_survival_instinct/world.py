@@ -2,7 +2,7 @@ from core.simulation.config import ScenarioConfig
 from core.simulation.scenario import build_scenario
 from toys.toy001_survival_instinct.naive_policy import NaivePolicy 
 
-def build_toy_world(seed=67, num_organism=10, duration=10000):
+def build_toy_world(seed=671, num_organism=10, duration=10000):
   config = ScenarioConfig(seed=seed, num_organism=num_organism, simulation_duration=duration, frame_delay=0.1)
 
   simulation = build_scenario(config)
