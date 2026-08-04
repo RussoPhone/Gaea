@@ -161,7 +161,7 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
                 tile = self.world.get_tile(tx, ty)
                 ocupado = self.world.get_entity_at(tx, ty) is not None
-                percepcao.add(Spatial, tile, ocupado)
+                percepcao.add(spatial, tile, ocupado)
         return percepcao
 
     def decide_action(self, entity, perception):
