@@ -1,7 +1,7 @@
 import pytest
 
 from core.ambient.world import World
-from core.ambient.tile import GRASS, WATER
+from core.ambient.tile import GRASS, WATER, STONE 
 from core.being.entity import Entity
 
 def test_set_get_tile():
@@ -47,3 +47,41 @@ def test_move_entity_bloqueado_pela_borda():
     assert moved is False
     assert (entity.x, entity.y) == (4, 4)
 
+def test_tile_bloqueante_impede_movimento():
+    world = World(5, 5)
+    world.set_tile(3, 2, STONE)
+    entity = Entity("teste", "@", 2, 2)
+    world.add_entity(entity)
+
+    moved = world.move_entity(entity, 1, 0)
+
+    assert moved is False
+    assert (entity.x, entity.y) == (2, 2)
+
+def test_is_passable_true_em_grama_livre():
+    world = World(5, 5)
+    assert world.is_passable(2, 2) is True
+
+def test_is_passable_false_fora_do_mundo():
+    world = World(5, 5)
+    assert world.is_passable(10, 10) is False
+    assert world.is_passable(-1, 0) is False
+
+def test_is_passable_false_em_tile_bloqueante():
+    world = World(5, 5)
+    world.set_tile(2, 2, STONE)
+    assert world.is_passable(2, 2) is False
+
+def test_is_passable_false_em_celula_ocupada():
+    world = World(5, 5)
+    ocupante = Entity("ocupante", "@", 2, 2)
+    world.add_entity(ocupante)
+    assert world.is_passable(2, 2) is False
+
+def test_is_passable_ignora_a_propria_entidade():
+    world = World(5, 5)
+    entity = Entity("teste", "@", 2, 2)
+    world.add_entity(entity)
+
+    assert world.is_passable(2, 2) is False
+    assert world.is_passable(2, 2, ignore_entity=entity) is True
