@@ -16,4 +16,4 @@ class EnvironmentSystem:
 
         if current_tile == FOOD:
             entity.body.eat()
-            simulation.world.set_tile(entity.x, entity.y, GRASS)
+#            simulation.world.set_tile(entity.x, entity.y, GRASS)
