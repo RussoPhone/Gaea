@@ -212,9 +212,9 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
     def run(self, render_enabled=True, steps_per_frame=1):
         #steps_per_frame=1 aceleração. Roda diversos ticks entre cada frame redenrizado.
-        while self.gtime.mtk < self.simulation_duration:
+        while self.gtime.mtksptk < self.simulation_duration:
             for _ in range(steps_per_frame):
-                if self.gtime.mtk >= self.simulation_duration:
+                if self.gtime.mtksptk >= self.simulation_duration:
                     break 
                 self.step()
 
