@@ -144,7 +144,7 @@ class Simulation: #È aqui que fica os parametros da simulação.
             return None
         percepcao = Perception()
         luz = self.sky.get_light(self.gtime)
-        alcance = entity.sensor.range
+        alcance = entity.sensor.range_
 
         for ddx in range(-alcance, alcance +1):
             for ddy in range(-alcance, alcance +1):
