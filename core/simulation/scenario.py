@@ -24,7 +24,7 @@ def random_passable_position(world):
     while True:
         x = random.randint(0, world.width - 1)
         y = random.randint(0, world.height - 1)
-        if world.if_passable(x, y):
+        if world.is_passable(x, y):
             return x, y
 
 def build_scenario(config): #monta um cenario completo a partir da scenarioconfig
