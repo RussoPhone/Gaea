@@ -1,6 +1,8 @@
 import random
 from collections import OrderedDict
 
+#avaliar possibilidades de memoria 
+
 class SpatialMemory:  #memoria de longo prazo que guarda as cords relevantes (ex: comida e agua)
     def __init__ (self, capacity=20, relevant_types=('food', 'water')):
         self.capacity = capacity #quantos locais são guardados no maximo
