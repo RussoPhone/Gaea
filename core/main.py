@@ -1,7 +1,8 @@
-from simulation.config import ScenarioConfig
+from core.simulation.config import ScenarioConfig
 from toys.toy001_survival_instinct.naive_policy import NaivePolicy
-from simulation.scenario import build_scenario
-from simulation.interactive_runner import InteractiveRunner
+from core.simulation.scenario import build_scenario
+from core.simulation.interactive_runner import InteractiveRunner
+from core.being.memory import SpatialMemory
 config = ScenarioConfig(
     seed =67,
     world_width=20,
@@ -17,6 +18,7 @@ def simulationteste():
     simulation = build_scenario(config)
     for entity in simulation.world.entities:
         entity.decision_system = NaivePolicy()
+        entity.memory = SpatialMemory()
     return simulation
 
 simulation = simulationteste()
