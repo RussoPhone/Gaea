@@ -34,6 +34,8 @@ class Simulation: #È aqui que fica os parametros da simulação.
             linhas.append(entity.debug_text())
             if entity.needs_action():
                 linhas.append(f"{entity.name} needs_action")
+            if getattr(entity, 'memory', None) is not None:
+                linhas.append(f'{entity.name} memoria: {entity.memory.debug_text()}')
             linhas.append("")
 
         linhas.append(self.renderer.render_lit(self.world, light))
@@ -98,6 +100,16 @@ class Simulation: #È aqui que fica os parametros da simulação.
         if not entity.body.alive:
             return 
         perception = self.perceive(entity)
+        
+        if getattr(entity, "memory", None) is not None and perception is not None:
+            tick = self.gtime.get_tk()
+            for leitura in perception.reading:
+                entity.memory.remember(
+                    entity.x + leitura['dx'],
+                    entity.y + leitura['dy'],
+                    leitura['surface'],
+                    tick,
+                )
 
         if entity.needs_action():
             reason = self.body_reason(entity)
