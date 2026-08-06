@@ -1,0 +1,27 @@
+from simulation.config import ScenarioConfig
+from toys.toy001_survival_instinct.naive_policy import NaivePolicy
+from simulation.scenario import build_scenario
+from simulation.interactive_runner import InteractiveRunner
+config = ScenarioConfig(
+    seed =67,
+    world_width=20,
+    world_height=10,
+    num_organism=4,
+    simulation_duration=100000,
+    frame_delay=0.1,
+)
+
+
+
+def simulationteste():
+    simulation = build_scenario(config)
+    for entity in simulation.world.entities:
+        entity.decision_system = NaivePolicy()
+    return simulation
+
+simulation = simulationteste()
+
+runner = InteractiveRunner(simulation)
+
+runner.loop()
+#Semana 2 concluida!

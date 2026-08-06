@@ -12,3 +12,7 @@ venv/
 
 # Notas locais
 futuridade.md
+
+#Pastas ignoraveis
+Locale/
+.aider*
