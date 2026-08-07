@@ -101,16 +101,7 @@ class Simulation: #È aqui que fica os parametros da simulação.
             return 
         perception = self.perceive(entity)
         
-        if getattr(entity, "memory", None) is not None and perception is not None:
-            tick = self.gtime.get_tk()
-            for leitura in perception.reading:
-                entity.memory.remember(
-                    entity.x + leitura['dx'],
-                    entity.y + leitura['dy'],
-                    leitura['surface'],
-                    tick,
-                )
-
+        
         if entity.needs_action():
             reason = self.body_reason(entity)
             before_action = self.capture_state(entity)
@@ -137,7 +128,19 @@ class Simulation: #È aqui que fica os parametros da simulação.
         tile_after = self.world.get_tile(entity.x, entity.y)
         body_after = self.capture_state(entity)
 
-        if body_before["hunger"] != body_after["hunger"] or body_before["thirst"] != body_after["thirst"]:
+        fome_desceu = body_before['hunger'] != body_after['hunger']
+        sede_desceu = body_before['thirst'] != body_after['thirst']
+        
+        if getattr(entity, 'memory', None) is not None: # gaiano não tem ideia do que é a tile tal qual um cego só sabe oque sentiu
+            if fome_desceu:
+                efeito = 'fome_desceu'
+            elif sede_desceu:
+                efeito = 'sede_desceu'
+            else:
+                efeito = 'path'
+            entity.memory.remember(entity.x, entity.y, efeito, self.gtime.get_tk())
+                
+        if fome_desceu or sede_desceu:
         #uma causa, um evento. 
          self.log_event(
             entity_name=entity.name,
