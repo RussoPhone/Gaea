@@ -9,7 +9,8 @@ class Body:
         if not self.alive:
             return
 
-        self.hunger += 0.3
+
+        self.hunger += 0.5
         self.thirst += 0.5 
 
         if self.hunger >= 100 or self.thirst >= 100:
