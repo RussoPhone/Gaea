@@ -5,6 +5,7 @@ import {
   zoomCameraAt,
 } from "./camera.mjs";
 import { deriveWorldEffects, reconcileSelection } from "./presentation.mjs";
+import { buildMemoryGraph, MemoryGraphRenderer } from "./memory-graph.mjs";
 import { WorldRenderer } from "./world-renderer.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -12,6 +13,8 @@ const canvas = $("world-canvas");
 const renderer = new WorldRenderer(canvas);
 const agentDialog = $("agent-dialog");
 const memoryDialog = $("memory-dialog");
+const memoryCanvas = $("memory-canvas");
+const memoryRenderer = new MemoryGraphRenderer(memoryCanvas);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 const state = {
@@ -29,6 +32,9 @@ const state = {
   pollQueued: false,
   controlBusy: false,
   online: false,
+  memoryGraph: null,
+  memoryHits: [],
+  selectedMemoryId: null,
 };
 
 const actionNames = {
@@ -243,6 +249,49 @@ function renderAgentSheet() {
   if (!agentDialog.open && !memoryDialog.open) agentDialog.show();
 }
 
+function renderMemoryDetail(node) {
+  const container = $("memory-detail");
+  container.replaceChildren();
+  if (!node) {
+    const hint = document.createElement("p");
+    hint.textContent = "Selecione uma memória para examinar sua evidência.";
+    container.append(hint);
+    return;
+  }
+  const kicker = document.createElement("small");
+  const title = document.createElement("h3");
+  const raw = document.createElement("pre");
+  kicker.textContent = node.kind === "relation" ? "RELAÇÃO APRENDIDA" : "EXPERIÊNCIA";
+  title.textContent = node.label;
+  raw.textContent = JSON.stringify(node.data, null, 2);
+  container.append(kicker, title, raw);
+}
+
+function drawMemoryGraph() {
+  if (!memoryDialog.open || !state.memoryGraph) return;
+  state.memoryHits = memoryRenderer.draw(state.memoryGraph, state.selectedMemoryId);
+}
+
+function refreshMemoryGraph() {
+  if (!memoryDialog.open || !state.selection?.detail) return;
+  state.memoryGraph = buildMemoryGraph(state.selection.detail.memory);
+  const selected = state.memoryGraph.nodes.find((node) => node.id === state.selectedMemoryId);
+  if (!selected) state.selectedMemoryId = null;
+  renderMemoryDetail(selected);
+  requestAnimationFrame(drawMemoryGraph);
+}
+
+function openMemory() {
+  if (!state.selection?.detail) return;
+  state.memoryGraph = buildMemoryGraph(state.selection.detail.memory);
+  state.selectedMemoryId = null;
+  setText("memory-title", `Memórias de #${state.selectedId}`);
+  renderMemoryDetail(null);
+  if (agentDialog.open) agentDialog.close();
+  if (!memoryDialog.open) memoryDialog.showModal();
+  requestAnimationFrame(drawMemoryGraph);
+}
+
 function renderChrome() {
   renderStatus();
   renderEvents();
@@ -278,6 +327,7 @@ function acceptSnapshot(snapshot) {
   }
   if (!state.camera) fitWorld();
   renderChrome();
+  refreshMemoryGraph();
 }
 
 function queueSnapshot() {
@@ -411,8 +461,29 @@ $("agent-perspective").addEventListener("click", () => {
   if (agentDialog.open) agentDialog.close();
 });
 $("agent-memory").addEventListener("click", () => {
-  if (agentDialog.open) agentDialog.close();
-  if (!memoryDialog.open) memoryDialog.showModal();
+  openMemory();
+});
+
+memoryCanvas.addEventListener("click", (event) => {
+  const bounds = memoryCanvas.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  const hit = state.memoryHits.findLast((node) => Math.hypot(x - node.x, y - node.y) <= node.radius);
+  state.selectedMemoryId = hit?.id || null;
+  const selected = state.memoryGraph?.nodes.find((node) => node.id === state.selectedMemoryId);
+  renderMemoryDetail(selected);
+  drawMemoryGraph();
+});
+
+memoryDialog.addEventListener("close", () => {
+  state.memoryGraph = null;
+  state.memoryHits = [];
+  state.selectedMemoryId = null;
+  renderAgentSheet();
+});
+
+window.addEventListener("resize", () => {
+  if (memoryDialog.open) requestAnimationFrame(drawMemoryGraph);
 });
 
 document.addEventListener("keydown", (event) => {

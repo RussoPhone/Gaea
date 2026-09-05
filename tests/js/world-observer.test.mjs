@@ -12,6 +12,7 @@ import {
 } from "../../core/interface/static/presentation.mjs";
 import {
   buildMemoryGraph,
+  layoutMemoryGraph,
 } from "../../core/interface/static/memory-graph.mjs";
 import {
   buildWorldFrame,
@@ -130,4 +131,27 @@ test("world frame culls records and keeps screen-space hits", () => {
     radius: 9,
     selected: true,
   });
+});
+
+test("memory layout is deterministic and keeps nodes inside its viewport", () => {
+  const graph = {
+    nodes: [
+      { id: "r1", kind: "relation" },
+      { id: "r2", kind: "relation" },
+      { id: "e1", kind: "experience" },
+      { id: "e2", kind: "experience" },
+      { id: "e3", kind: "experience" },
+    ],
+    edges: [],
+  };
+
+  const layout = layoutMemoryGraph(graph, 800, 600);
+
+  assert.deepEqual(layout, layoutMemoryGraph(graph, 800, 600));
+  assert.equal(layout.every(({ x, y }) => x >= 0 && x <= 800 && y >= 0 && y <= 600), true);
+  const distance = ({ x, y }) => Math.hypot(x - 400, y - 300);
+  const relations = layout.filter((node) => node.kind === "relation");
+  const experiences = layout.filter((node) => node.kind === "experience");
+  assert.equal(relations.every((node) => distance(node) < 168), true);
+  assert.equal(experiences.every((node) => Math.abs(distance(node) - 168) < 0.000001), true);
 });
