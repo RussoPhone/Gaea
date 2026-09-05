@@ -12,7 +12,9 @@ Na raiz do projeto:
 python -m core.main ui
 ```
 
-Abra **http://127.0.0.1:8765**. A execução começa pausada. A interface tem mapa, seleção por clique/lista, estado corporal, orientação, carga, ação, projeção sensorial e inspeção de relações/experiências. Os controles permitem continuar, pausar, avançar um tick, mudar velocidade e disparar uma rajada de ticks. O worker avança independentemente do polling da interface.
+Abra **http://127.0.0.1:8765**. A execução começa pausada. O mundo top-down ocupa a janela: arraste para mover a câmera, use a roda para aproximar e clique num gaiano para ver ação, fome, sede, orientação e carga. A ficha permite acompanhar o indivíduo, trocar para o campo sensorial que ele percebe e abrir seu grafo de relações e experiências. Eventos recentes aparecem sobre o mapa. Os controles inferiores permitem continuar, pausar, avançar um tick, mudar velocidade e disparar uma rajada. O worker avança independentemente do polling da interface.
+
+Atalhos: `Espaço` continua ou pausa; `.` avança um tick; `F` acompanha a seleção; `0` enquadra o mundo; setas movem a câmera; `Esc` fecha a inspeção ou retorna à visão global.
 
 Para um mundo menor:
 
