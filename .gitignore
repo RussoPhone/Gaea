@@ -16,3 +16,7 @@ futuridade.md
 #Pastas ignoraveis
 Locale/
 .aider*
+
+# Resultados experimentais locais
+runs/
+*.gaea

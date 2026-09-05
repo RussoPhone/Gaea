@@ -27,8 +27,8 @@ def test_percebe_agua_a_frente_dentro_do_alcance():
 
     percepcao = simulation.perceive(gaiano)
     assert percepcao is not None 
-    superficies = [r["surface"] for r in percepcao.reading]
-    assert "water" in superficies
+    superficies = [r["appearance"] for r in percepcao.reading]
+    assert WATER.appearance in superficies
 
 def test_nao_percebe_o_que_esta_atras():
     simulation, world = build_simulacao()
@@ -40,8 +40,8 @@ def test_nao_percebe_o_que_esta_atras():
 
     percepcao = simulation.perceive(gaiano)
     assert percepcao is not None 
-    superficies = [r["surface"] for r in percepcao.reading]
-    assert "water" not in superficies
+    superficies = [r["appearance"] for r in percepcao.reading]
+    assert WATER.appearance not in superficies
  
 def test_sem_sensor_nao_percebe_nada():
     simulation, world = build_simulacao()
@@ -60,8 +60,8 @@ def test_nao_percebe_alem_do_proprio_alcance():
 
     percepcao = simulation.perceive(gaiano)
     assert percepcao is not None 
-    superficies = [r["surface"] for r in percepcao.reading]
-    assert "water" not in superficies
+    superficies = [r["appearance"] for r in percepcao.reading]
+    assert WATER.appearance not in superficies
 
 def test_percepcao_nao_inclui_a_propria_posicao():
     simulation, world = build_simulacao()

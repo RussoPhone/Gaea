@@ -7,5 +7,5 @@ def build_toy_world(seed=671, num_organism=10, duration=10000):
 
   simulation = build_scenario(config)
   for entity in simulation.world.entities:
-    entity.decision_system = NaivePolicy()
+    entity.decision_system = NaivePolicy(simulation.rng)
   return simulation 

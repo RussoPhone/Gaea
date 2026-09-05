@@ -7,6 +7,7 @@ class Perception:
             "distance": spatial.distance(),
             "dx" : spatial.dx,
             "dy": spatial.dy,
-            "surface": tile.tile_type,
+            "appearance": tile.appearance,
+            "blocking": tile.blocking,
             "occupied": occupied,
         })

@@ -9,7 +9,8 @@ from core.simulation.gtime import Gtime
 from core.simulation.simulation import Simulation
 from core.sense.sensor import Sensor
 
-def place_tiles(world, tile, amount, reserve_grass=0):
+def place_tiles(world, tile, amount, reserve_grass=0, rng=None):
+    rng = rng or random.Random()
     available = [
         (x, y)
         for y in range(world.height)
@@ -18,10 +19,11 @@ def place_tiles(world, tile, amount, reserve_grass=0):
     ]
     amount_to_place = min(amount, max(0, len(available) - reserve_grass))
 
-    for x, y in random.sample(available, amount_to_place):
+    for x, y in rng.sample(available, amount_to_place):
         world.set_tile(x, y, tile)
 
-def random_passable_position(world):
+def random_passable_position(world, rng=None):
+    rng = rng or random.Random()
     available = [
         (x, y)
         for y in range(world.height)
@@ -30,10 +32,10 @@ def random_passable_position(world):
     ]
     if not available:
         raise ValueError("não há posição livre de grama para a entidade")
-    return random.choice(available)
+    return rng.choice(available)
 
 def build_scenario(config): #monta um cenario completo a partir da scenarioconfig
-    random.seed(config.seed) 
+    rng = random.Random(config.seed)
     
     world = World(config.world_width, config.world_height)
 
@@ -41,12 +43,12 @@ def build_scenario(config): #monta um cenario completo a partir da scenarioconfi
     if config.num_organism > capacity:
         raise ValueError("quantidade de organismos excede a capacidade do mundo")
     
-    place_tiles(world, WATER, config.num_water_tiles, reserve_grass=config.num_organism)
-    place_tiles(world, FOOD, config.num_food_tiles, reserve_grass=config.num_organism)
-    place_tiles(world, STONE, config.num_stone_tiles, reserve_grass=config.num_organism)
+    place_tiles(world, WATER, config.num_water_tiles, reserve_grass=config.num_organism, rng=rng)
+    place_tiles(world, FOOD, config.num_food_tiles, reserve_grass=config.num_organism, rng=rng)
+    place_tiles(world, STONE, config.num_stone_tiles, reserve_grass=config.num_organism, rng=rng)
 
     for i in range(config.num_organism):
-        x, y = random_passable_position(world)
+        x, y = random_passable_position(world, rng=rng)
         organism = Organism(
             f"gaiano_{i}",
             str(i),
@@ -69,4 +71,5 @@ def build_scenario(config): #monta um cenario completo a partir da scenarioconfi
         frame_delay=config.frame_delay,
         )
 
+    simulation.rng = rng
     return simulation

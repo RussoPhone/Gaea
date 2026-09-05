@@ -5,6 +5,7 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
         self.width = width
         self.height = height
         self.entities = []
+        self.occupancy = {}
         self.tiles = [
             [default_tile for x in range(width)]
             for y in range(height)
@@ -80,13 +81,17 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
         if not self.is_inside(entity.x, entity.y):
             raise ValueError(f"entidade fora do mundo: x={entity.x}, y={entity.y}")
 
+        if self.get_entity_at(entity.x, entity.y) is not None:
+            raise ValueError("posição já ocupada")
         self.entities.append(entity)
+        self.occupancy[(entity.x, entity.y)] = entity
 
     def get_entity_at(self, x, y):
-        for entity in self.entities:
-            if entity.x == x and entity.y == y:
-                return entity
-        return None
+        return self.occupancy.get((x, y))
+
+    def remove_entity(self, entity):
+        self.occupancy.pop((entity.x, entity.y), None)
+        self.entities.remove(entity)
 
     def move_entity(self, entity, dx, dy):
         new_x = entity.x + dx
@@ -95,8 +100,10 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
         if not self.is_passable(new_x, new_y, ignore_entity=entity):
             return False
 
+        self.occupancy.pop((entity.x, entity.y), None)
         entity.x = new_x
         entity.y = new_y
+        self.occupancy[(new_x, new_y)] = entity
 
         return True
 

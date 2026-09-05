@@ -28,7 +28,7 @@ class AlvoAtribuidoPeloTeste:
         if perception is None:
             return self.fallback.decide(entity, perception)
 
-        candidatos = [r for r in perception.reading if r["surface"] == self.tile_type_alvo]
+        candidatos = [r for r in perception.reading if r["appearance"] == self.tile_type_alvo]
         if not candidatos:
             return self.fallback.decide(entity, perception)
 
@@ -44,7 +44,7 @@ def build_cenario_com_barreira():
     gaiano = Organism(
         "gaiano_teste", "G", 0, 1,
         sensor=Sensor(range_=6, requires_light=False),
-        decision=AlvoAtribuidoPeloTeste(tile_type_alvo="water", fallback=NaivePolicy()),
+        decision=AlvoAtribuidoPeloTeste(tile_type_alvo=WATER.appearance, fallback=NaivePolicy()),
     )
     gaiano.orientation = (1, 0)
     world.add_entity(gaiano)
@@ -77,7 +77,7 @@ def test_gaiano_sem_percepcao_de_recurso_cai_no_fallback():
     gaiano = Organism(
         "gaiano_teste", "G", 2, 1,
         sensor=Sensor(range_=6, requires_light=False),
-        decision=AlvoAtribuidoPeloTeste(tile_type_alvo="water", fallback=NaivePolicy()),
+        decision=AlvoAtribuidoPeloTeste(tile_type_alvo=WATER.appearance, fallback=NaivePolicy()),
     )
     world.add_entity(gaiano)
     simulation = Simulation(
