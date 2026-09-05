@@ -13,6 +13,9 @@ import {
 import {
   buildMemoryGraph,
 } from "../../core/interface/static/memory-graph.mjs";
+import {
+  buildWorldFrame,
+} from "../../core/interface/static/world-renderer.mjs";
 
 test("fitCamera keeps the complete world inside the viewport", () => {
   const camera = fitCamera(20, 10, 1000, 600, 32);
@@ -95,4 +98,36 @@ test("memory graph joins relations to their evidence without semantic labels", (
     to: "experience:9:self:1:ingest:4:2,4,6",
   }]);
   assert.equal(graph.nodes[0].label, "assinatura 2·4·6 · ingest");
+});
+
+test("world frame culls records and keeps screen-space hits", () => {
+  const snapshot = {
+    width: 100,
+    height: 100,
+    terrain: [
+      { x: 9, y: 11 },
+      { x: 10, y: 11 },
+      { x: 14, y: 11 },
+      { x: 15, y: 11 },
+    ],
+    objects: [{ id: 2, x: 12, y: 12 }],
+    agents: [{ id: 3, x: 13, y: 11 }],
+  };
+
+  const frame = buildWorldFrame(
+    snapshot,
+    { cell: 20, offsetX: -200, offsetY: -200 },
+    { width: 100, height: 100 },
+    3,
+  );
+
+  assert.deepEqual(frame.terrain.map(({ x }) => x), [10, 14]);
+  assert.deepEqual(frame.objects.map(({ id }) => id), [2]);
+  assert.deepEqual(frame.hits[0], {
+    id: 3,
+    x: 70,
+    y: 30,
+    radius: 9,
+    selected: true,
+  });
 });
