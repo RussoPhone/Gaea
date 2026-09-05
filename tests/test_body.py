@@ -23,11 +23,31 @@ def test_corpo_morto_nao_atualiza_mais_necessidades():
     assert body.hunger == 10
     assert body.thirst == 10
 
-def test_comer_reduz_fome_normalmente():
+def test_ingest_food_reduz_apenas_fome():
     body = Body()
     body.hunger = 50
-    body.eat()
+    body.thirst = 50
+    body.ingest("food")
     assert body.hunger == 20
+    assert body.thirst == 50
+
+def test_ingest_water_reduz_apenas_sede():
+    body = Body()
+    body.hunger = 50
+    body.thirst = 50
+    body.ingest("water")
+    assert body.hunger == 50
+    assert body.thirst == 20
+
+def test_corpo_morto_nao_ingere_recurso():
+    body = Body()
+    body.alive = False
+    body.hunger = 50
+    body.thirst = 50
+    body.ingest("food")
+    body.ingest("water")
+    assert body.hunger == 50
+    assert body.thirst == 50
 
 def test_needs_action_verdadeiro_acima_de_50():
     body = Body()
@@ -39,5 +59,4 @@ def test_needs_action_falso_corpo_morto():
     body.alive = False
     body.hunger = 90
     assert body.needs_action() is False
-
 

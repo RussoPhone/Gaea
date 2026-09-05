@@ -38,7 +38,7 @@ def test_beber_agua_gera_evento_separado_de_consumo():
 
     simulation.step()
 
-    eventos_consumo = [e for e in simulation.event_log.events if e.action == "consumiu_recurso"]
+    eventos_consumo = [e for e in simulation.event_log.events if e.action == "ingest"]
     assert len(eventos_consumo) == 1
     assert eventos_consumo[0].before["thirst"] > eventos_consumo[0].after["thirst"]
 

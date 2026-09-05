@@ -62,7 +62,13 @@ def test_gaiano_contorna_barreira_e_alcanca_a_agua():
 
     simulation.run(render_enabled=False)
 
-    assert (gaiano.x, gaiano.y) == (4, 1)
+    consumos_de_agua = [
+        evento for evento in simulation.event_log.events
+        if evento.entity_name == gaiano.name
+        and evento.action == "ingest"
+        and evento.reason == "water"
+    ]
+    assert consumos_de_agua
 
 def test_gaiano_sem_percepcao_de_recurso_cai_no_fallback():
     #mundo sem água nenhuma: o alvo nunca é encontrado, então o decision_system
