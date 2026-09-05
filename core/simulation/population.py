@@ -205,6 +205,17 @@ class PopulationSimulation:
         if self.event_sink:
             self.event_sink(event)
 
+    def _observable_position(self, token):
+        obj = self.objects.get(token)
+        if obj is not None:
+            if obj.carrier is not None:
+                carrier = self.agents.get(obj.carrier)
+                if carrier is not None:
+                    return (carrier.x, carrier.y)
+            return (obj.x, obj.y)
+        agent = self.agents.get(token)
+        return (agent.x, agent.y) if agent is not None else None
+
     def _apply(self, a, action):
         """Execute exactly one attempt. Return only motor/visible success."""
         obj = self.objects.get(action.target)
@@ -308,7 +319,8 @@ class PopulationSimulation:
                     a.body.thirst += 35.
                     a.last_birth = self.tick
                     self.births += 1
-                    self._event(a.uid, 'birth', child=child.uid, generation=child.generation)
+                    self._event(a.uid, 'birth', child=child.uid, generation=child.generation,
+                                position=(child.x, child.y))
                     break
 
     def step(self, actions=None):
@@ -339,6 +351,7 @@ class PopulationSimulation:
             item = next((o for o in view.items if o.token == action.target), None)
             if view.carried and action.target == view.carried.token:
                 item = view.carried
+            target_position = self._observable_position(action.target)
             success = self._apply(a, action)
             a.last_action = action.verb
             a.last_target = action.target
@@ -354,7 +367,8 @@ class PopulationSimulation:
                     context=tuple(o.appearance for o in view.items[:8])))
             self.action_counts[action.verb] += 1
             if success and action.verb in ('ingest', 'pick', 'drop', 'place', 'give', 'signal'):
-                self._event(a.uid, action.verb, target=action.target, delta=delta)
+                self._event(a.uid, action.verb, target=action.target, delta=delta,
+                            position=(a.x, a.y), target_position=target_position)
             visible_actions.append(a.uid)
         if self.config.observe and self.config.learning:
             # Invert the already local visibility lists, avoiding N² observer/action scans.

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
+from core.cognition.records import Action
 from core.interface.server import create_server
 from core.simulation.population import PopulationConfig, PopulationSimulation
 
@@ -173,6 +174,34 @@ def test_snapshot_converte_id_numerico_para_o_runtime_real():
         assert status == 200
         assert snapshot["selected"]["id"] == 1
         assert simulation.tick == 0
+
+
+def test_snapshot_localiza_evento_sem_expor_efeito_fisico():
+    simulation = PopulationSimulation(
+        PopulationConfig(
+            width=5,
+            height=5,
+            population=1,
+            objects=0,
+            stones=0,
+            metabolism=0,
+            reproduction=False,
+        )
+    )
+    agent = next(iter(simulation.agents.values()))
+    target = simulation.add_object(
+        agent.x,
+        agent.y,
+        (7, 8, 9),
+        effect=(-20, 0),
+    )
+
+    simulation.step({agent.uid: Action("ingest", target.uid)})
+
+    event = simulation.snapshot()["events"][-1]
+    assert event["position"] == (agent.x, agent.y)
+    assert event["target_position"] == (agent.x, agent.y)
+    assert "effect" not in event
 
 
 def test_pagina_observadora_e_assets_sao_servidos():
