@@ -208,13 +208,28 @@ def test_pagina_observadora_e_assets_sao_servidos():
     simulation = MinimalSimulation()
     with running_server(simulation) as server:
         status, html = request(server, "GET", "/")
-        js_status, javascript = request(server, "GET", "/app.js")
         css_status, stylesheet = request(server, "GET", "/style.css")
 
-        assert (status, js_status, css_status) == (200, 200, 200)
-        assert b'<canvas id="world-canvas"' in html
-        assert "Visão do agente".encode() in html
-        assert b"/api/snapshot" in javascript
+        assert (status, css_status) == (200, 200)
+        assert html.count(b'id="world-canvas"') == 1
+        for element_id in (
+            b"world-status",
+            b"event-log",
+            b"agent-dialog",
+            b"memory-dialog",
+            b"time-controls",
+        ):
+            assert b'id="' + element_id + b'"' in html
+        for asset in (
+            "app.mjs",
+            "camera.mjs",
+            "presentation.mjs",
+            "memory-graph.mjs",
+            "world-renderer.mjs",
+        ):
+            asset_status, body = request(server, "GET", f"/{asset}")
+            assert asset_status == 200
+            assert body
         assert b"canvas" in stylesheet
 
 

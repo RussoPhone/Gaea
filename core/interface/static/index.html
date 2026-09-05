@@ -4,180 +4,91 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Gaea — Observatório</title>
+  <title>Gaea — Mundo vivo</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">G</span>
-      <div>
-        <p class="eyebrow">SIMULAÇÃO VIVA</p>
-        <h1>Observatório Gaea</h1>
+  <main class="observer-shell">
+    <header id="world-status" class="world-status">
+      <div class="brand" aria-label="Gaea, mundo vivo">
+        <span class="brand-rune" aria-hidden="true">G</span>
+        <div><strong>GAEA</strong><small>MUNDO VIVO</small></div>
       </div>
-    </div>
-    <div class="connection" aria-live="polite">
-      <span id="connection-dot" class="connection-dot"></span>
-      <span id="connection-label">Conectando…</span>
-      <small id="last-update">aguardando amostra</small>
-    </div>
-  </header>
+      <div class="world-readout" aria-live="polite">
+        <span><small>ERA</small><strong id="tick-value">0</strong></span>
+        <span><small>VIVOS</small><strong id="alive-value">—</strong></span>
+        <span class="wide-readout"><small>GERAÇÃO</small><strong id="generation-value">—</strong></span>
+        <span class="wide-readout"><small>NASC · MORT</small><strong><i id="births-value">0</i> · <i id="deaths-value">0</i></strong></span>
+      </div>
+      <div class="connection" aria-live="polite">
+        <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+        <span><strong id="run-state">PAUSADA</strong><small id="connection-label">conectando</small></span>
+      </div>
+    </header>
 
-  <main>
-    <section class="control-deck" aria-label="Controles do relógio">
-      <div class="clock-block">
-        <span class="eyebrow">RELÓGIO</span>
-        <strong id="tick-value">0</strong>
-        <span class="unit">ticks</span>
+    <section class="world-stage" aria-label="Observação do mundo">
+      <canvas id="world-canvas" tabindex="0" aria-label="Mapa top-down do mundo de Gaea"></canvas>
+      <div class="perspective-label">
+        <small id="perspective-kicker">VISÃO DO OBSERVADOR</small>
+        <strong id="perspective-title">Mundo inteiro</strong>
       </div>
-      <div class="button-group">
-        <button id="run-button" class="primary" type="button">Continuar</button>
-        <button id="pause-button" type="button">Pausar</button>
-        <button id="step-button" type="button">Passo único</button>
+      <nav class="map-tools" aria-label="Câmera">
+        <button id="fit-world" type="button" title="Enquadrar o mundo (0)">⌗<span>Enquadrar</span></button>
+        <button id="follow-agent" type="button" title="Acompanhar seleção (F)" disabled>◎<span>Acompanhar</span></button>
+        <button id="global-view" type="button" title="Voltar à visão global" hidden>◫<span>Mundo</span></button>
+      </nav>
+      <details id="event-log" class="event-log" open>
+        <summary><span>ACONTECIMENTOS</span><i id="event-count">0</i></summary>
+        <ol id="event-list"></ol>
+      </details>
+      <p id="error-banner" class="error-banner" role="alert" hidden></p>
+      <p class="map-hint">arraste para mover · roda para aproximar · clique num gaiano para observar</p>
+    </section>
+
+    <nav id="time-controls" class="time-controls" aria-label="Tempo da simulação">
+      <div class="transport">
+        <button id="run-button" class="transport-primary" type="button" title="Continuar (Espaço)"><span aria-hidden="true">▶</span>Continuar</button>
+        <button id="pause-button" type="button" title="Pausar (Espaço)"><span aria-hidden="true">Ⅱ</span>Pausar</button>
+        <button id="step-button" type="button" title="Avançar um tick (.)"><span aria-hidden="true">›|</span>Passo</button>
       </div>
-      <label class="field">
-        <span>Velocidade</span>
-        <select id="speed-select">
-          <option value="2">2 ticks/s</option>
-          <option value="10">10 ticks/s</option>
-          <option value="20" selected>20 ticks/s</option>
-          <option value="60">60 ticks/s</option>
-          <option value="200">200 ticks/s</option>
-        </select>
-      </label>
+      <label class="compact-field"><span>Ritmo</span><select id="speed-select">
+        <option value="2">2/s</option><option value="10">10/s</option>
+        <option value="20" selected>20/s</option><option value="60">60/s</option>
+        <option value="200">200/s</option>
+      </select></label>
       <form id="burst-form" class="burst-form">
-        <label class="field">
-          <span>Rajada</span>
-          <input id="burst-value" type="number" min="1" max="1000000" value="100" required>
-        </label>
+        <label class="compact-field"><span>Avançar</span><input id="burst-value" type="number" min="1" max="1000000" value="100" required></label>
         <button type="submit">Executar</button>
       </form>
-      <div class="run-state">
-        <span id="run-state">PAUSADA</span>
-        <small id="remaining-value">sem rajada</small>
+      <span id="remaining-value" class="remaining-value">tempo suspenso</span>
+    </nav>
+
+    <dialog id="agent-dialog" class="agent-dialog" aria-labelledby="agent-id">
+      <form method="dialog" class="dialog-close"><button aria-label="Fechar ficha">×</button></form>
+      <header><small>INDIVÍDUO OBSERVADO</small><h2 id="agent-id">Gaiano</h2><p id="agent-death" class="death-notice" hidden>morreu neste tick</p></header>
+      <div class="agent-now">
+        <span><small>AÇÃO</small><strong id="agent-action">—</strong></span>
+        <span><small>POSIÇÃO</small><strong id="agent-position">—</strong></span>
       </div>
-    </section>
+      <div class="need-row"><label for="agent-hunger">Fome</label><progress id="agent-hunger" max="100" value="0"></progress><output id="agent-hunger-value">0</output></div>
+      <div class="need-row"><label for="agent-thirst">Sede</label><progress id="agent-thirst" max="100" value="0"></progress><output id="agent-thirst-value">0</output></div>
+      <dl class="agent-meta">
+        <div><dt>Geração</dt><dd id="agent-generation">—</dd></div>
+        <div><dt>Orientação</dt><dd id="agent-orientation">—</dd></div>
+        <div><dt>Carga</dt><dd id="agent-carried">sem carga</dd></div>
+      </dl>
+      <footer>
+        <button id="agent-follow" type="button">◎ Acompanhar</button>
+        <button id="agent-perspective" type="button">◉ Visão do agente</button>
+        <button id="agent-memory" class="accent" type="button">⌘ Memórias</button>
+      </footer>
+    </dialog>
 
-    <p id="error-banner" class="error-banner" role="alert" hidden></p>
-
-    <section class="metrics observer-only" aria-label="Métricas globais">
-      <article><span>Vivos</span><strong id="metric-alive">—</strong></article>
-      <article><span>Nascimentos</span><strong id="metric-births">—</strong></article>
-      <article><span>Mortes</span><strong id="metric-deaths">—</strong></article>
-      <article><span>Objetos</span><strong id="metric-objects">—</strong></article>
-      <article><span>Relações</span><strong id="metric-relations">—</strong></article>
-      <article><span>Luz</span><strong id="metric-light">—</strong></article>
-    </section>
-
-    <section class="workspace">
-      <article class="map-card">
-        <div class="card-heading">
-          <div>
-            <p class="eyebrow">CAMPO SENSORIAL</p>
-            <h2 id="map-title">Mapa global</h2>
-          </div>
-          <div class="view-switch" role="group" aria-label="Modo de visão">
-            <button id="global-view" class="active" type="button">Global</button>
-            <button id="selected-view" type="button">Visão do agente</button>
-          </div>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="world-canvas" aria-label="Mapa da simulação"></canvas>
-          <div id="canvas-empty" class="canvas-empty" hidden>
-            Selecione um agente no mapa ou na lista para ver sua última percepção.
-          </div>
-          <span id="sample-note" class="sample-note" hidden>Última amostra sensorial</span>
-        </div>
-        <div class="legend observer-only" aria-label="Legenda">
-          <span><i class="dot agent-dot"></i>agente</span>
-          <span><i class="dot object-dot"></i>recurso</span>
-          <span><i class="dot blocking-dot"></i>bloqueio</span>
-          <span><i class="orientation-key">↗</i>orientação</span>
-        </div>
-      </article>
-
-      <aside class="inspector">
-        <div class="card-heading">
-          <div>
-            <p class="eyebrow">INDIVÍDUO</p>
-            <h2 id="selected-name">Nenhum selecionado</h2>
-          </div>
-          <span id="generation" class="tag observer-only">—</span>
-        </div>
-
-        <div id="selection-placeholder" class="placeholder">
-          Clique em um agente para inspecionar corpo, sinais e memória.
-        </div>
-
-        <div id="selection-detail" hidden>
-          <div class="facts">
-            <div><span id="selected-position-label">Posição global</span><strong id="selected-position">—</strong></div>
-            <div><span>Orientação</span><strong id="selected-orientation">—</strong></div>
-            <div><span>Ação</span><strong id="selected-action">—</strong></div>
-            <div><span>Carga</span><strong id="selected-carried">sem carga</strong></div>
-          </div>
-
-          <section class="inspector-section">
-            <h3>Estado corporal</h3>
-            <div class="body-meter">
-              <div><span>Fome</span><strong id="hunger-value">0</strong></div>
-              <progress id="hunger-meter" max="100" value="0"></progress>
-            </div>
-            <div class="body-meter">
-              <div><span>Sede</span><strong id="thirst-value">0</strong></div>
-              <progress id="thirst-meter" max="100" value="0"></progress>
-            </div>
-          </section>
-
-          <section class="inspector-section">
-            <div class="section-heading"><h3>Sinais percebidos</h3><span id="signal-count">0</span></div>
-            <div id="signals-list" class="compact-list"></div>
-          </section>
-
-          <section class="inspector-section">
-            <details id="sensory-sample" class="raw-details">
-              <summary>Amostra sensorial <span id="perception-count">0 registros</span></summary>
-              <pre id="perception-detail"></pre>
-            </details>
-          </section>
-
-          <section class="inspector-section">
-            <div class="section-heading"><h3>Relações</h3><span id="relation-count">0</span></div>
-            <div id="relations-list" class="relation-list"></div>
-          </section>
-
-          <section class="inspector-section">
-            <div class="section-heading"><h3>Experiências</h3><span id="forgotten-count">0 esquecidas</span></div>
-            <div id="experiences-list" class="compact-list"></div>
-          </section>
-
-          <section class="inspector-section">
-            <h3>Decisão atual</h3>
-            <div id="decision-detail" class="decision-detail"></div>
-          </section>
-        </div>
-      </aside>
-    </section>
-
-    <section class="lower-grid observer-only">
-      <article class="panel">
-        <div class="card-heading">
-          <div><p class="eyebrow">POPULAÇÃO</p><h2>Agentes</h2></div>
-          <span id="agent-count" class="tag">0</span>
-        </div>
-        <div id="agent-list" class="agent-list"></div>
-      </article>
-      <article class="panel">
-        <div class="card-heading">
-          <div><p class="eyebrow">OBSERVADOR</p><h2>Eventos recentes</h2></div>
-          <span class="tag">últimos 12</span>
-        </div>
-        <ol id="event-list" class="event-list"></ol>
-      </article>
-    </section>
+    <dialog id="memory-dialog" class="memory-dialog" aria-labelledby="memory-title">
+      <header><div><small>MAPA COGNITIVO</small><h2 id="memory-title">Memórias</h2></div><form method="dialog"><button aria-label="Fechar memórias">×</button></form></header>
+      <div class="memory-stage"><canvas id="memory-canvas" aria-label="Grafo de memórias do agente"></canvas><aside id="memory-detail"><p>Selecione uma memória para examinar sua evidência.</p></aside></div>
+    </dialog>
   </main>
-
-  <footer>Interface somente observadora · controles alteram exclusivamente o relógio</footer>
-  <script src="/app.js" defer></script>
+  <script type="module" src="/app.mjs"></script>
 </body>
 </html>

@@ -266,7 +266,11 @@ class ObserverRequestHandler(BaseHTTPRequestHandler):
         files = {
             "/": "index.html",
             "/index.html": "index.html",
-            "/app.js": "app.js",
+            "/app.mjs": "app.mjs",
+            "/camera.mjs": "camera.mjs",
+            "/presentation.mjs": "presentation.mjs",
+            "/memory-graph.mjs": "memory-graph.mjs",
+            "/world-renderer.mjs": "world-renderer.mjs",
             "/style.css": "style.css",
         }
         filename = files.get(path)
