@@ -129,7 +129,7 @@ class Simulation: #È aqui que fica os parametros da simulação.
         #uma causa, um evento. 
          self.log_event(
             entity_name=entity.name,
-            action="consumiu_recurso",
+            action="ingest",
             reason=tile_before.tile_type,
             before=body_before,
             after=body_after,
@@ -212,9 +212,9 @@ class Simulation: #È aqui que fica os parametros da simulação.
 
     def run(self, render_enabled=True, steps_per_frame=1):
         #steps_per_frame=1 aceleração. Roda diversos ticks entre cada frame redenrizado.
-        while self.gtime.mtksptk < self.simulation_duration:
+        while self.gtime.mtk < self.simulation_duration:
             for _ in range(steps_per_frame):
-                if self.gtime.mtksptk >= self.simulation_duration:
+                if self.gtime.mtk >= self.simulation_duration:
                     break 
                 self.step()
 
@@ -229,4 +229,3 @@ class Simulation: #È aqui que fica os parametros da simulação.
         sys.stdout.write("\033[H\033[J")
         sys.stdout.write(frame + "\n")
         sys.stdout.flush()
-
