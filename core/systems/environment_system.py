@@ -11,9 +11,8 @@ class EnvironmentSystem:
             entity.y
         )
 
-        if current_tile == WATER:
-            entity.body.drink()
+        if current_tile in (FOOD, WATER):
+            entity.body.ingest(current_tile.tile_type)
 
         if current_tile == FOOD:
-            entity.body.eat()
-#            simulation.world.set_tile(entity.x, entity.y, GRASS)
+            simulation.world.set_tile(entity.x, entity.y, GRASS)
