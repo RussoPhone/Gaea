@@ -9,32 +9,41 @@ from core.simulation.gtime import Gtime
 from core.simulation.simulation import Simulation
 from core.sense.sensor import Sensor
 
-def place_tiles(world, tile, amount):
-    placed = 0
+def place_tiles(world, tile, amount, reserve_grass=0):
+    available = [
+        (x, y)
+        for y in range(world.height)
+        for x in range(world.width)
+        if world.get_tile(x, y) == GRASS
+    ]
+    amount_to_place = min(amount, max(0, len(available) - reserve_grass))
 
-    while placed < amount:
-        x = random.randint(0, world.width -1)
-        y = random.randint(0, world.height -1)
-
-        if world.get_tile(x, y) == GRASS:
-            world.set_tile(x, y, tile)
-            placed += 1
+    for x, y in random.sample(available, amount_to_place):
+        world.set_tile(x, y, tile)
 
 def random_passable_position(world):
-    while True:
-        x = random.randint(0, world.width - 1)
-        y = random.randint(0, world.height - 1)
-        if world.is_passable(x, y):
-            return x, y
+    available = [
+        (x, y)
+        for y in range(world.height)
+        for x in range(world.width)
+        if world.get_tile(x, y) == GRASS and world.is_passable(x, y)
+    ]
+    if not available:
+        raise ValueError("não há posição livre de grama para a entidade")
+    return random.choice(available)
 
 def build_scenario(config): #monta um cenario completo a partir da scenarioconfig
     random.seed(config.seed) 
     
     world = World(config.world_width, config.world_height)
+
+    capacity = config.world_width * config.world_height
+    if config.num_organism > capacity:
+        raise ValueError("quantidade de organismos excede a capacidade do mundo")
     
-    place_tiles(world, WATER, config.num_water_tiles)
-    place_tiles(world, FOOD, config.num_food_tiles)
-    place_tiles(world, STONE, config.num_stone_tiles)
+    place_tiles(world, WATER, config.num_water_tiles, reserve_grass=config.num_organism)
+    place_tiles(world, FOOD, config.num_food_tiles, reserve_grass=config.num_organism)
+    place_tiles(world, STONE, config.num_stone_tiles, reserve_grass=config.num_organism)
 
     for i in range(config.num_organism):
         x, y = random_passable_position(world)
