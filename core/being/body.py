@@ -10,27 +10,20 @@ class Body:
             return
 
 
-        self.hunger += 0.5
-        self.thirst += 0.5 
+        self.hunger += 1
+        self.thirst += 2
 
         if self.hunger >= 100 or self.thirst >= 100:
             self.alive = False
 
-    def drink(self): #função de consumir liquido.
+    def ingest(self, resource_type):
         if not self.alive:
             return
-        self.thirst -= 10
 
-        if self.thirst < 0:
-            self.thirst = 0
- 
-    def eat(self):
-        if not self.alive:
-            return
-        self.hunger -= 5
-
-        if self.hunger < 0:
-            self.hunger = 0
+        if resource_type == "food":
+            self.hunger = max(0, self.hunger - 30)
+        elif resource_type == "water":
+            self.thirst = max(0, self.thirst - 30)
 
     def needs_action(self): #função que desperta ação
         if not self.alive:
