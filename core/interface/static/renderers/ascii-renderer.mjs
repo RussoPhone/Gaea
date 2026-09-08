@@ -6,14 +6,14 @@ const OBJECT_GLYPH = Object.freeze({ food: 'o', water: '~', stone: '*' });
 const OBJECT_COLOR = Object.freeze({ food: '#b6885e', water: '#86a4a7', stone: '#aaa797' });
 
 export function asciiGlyph(item, cellSize = 0) {
-  if (item.layer === 'agent') return cellSize >= 18 ? '◉' : '@';
+  if (item.layer === 'agent') return '@';
   if (item.kind === 'stack') return '&';
   if (item.layer === 'terrain') return TERRAIN_GLYPH[item.kind] || '.';
   return OBJECT_GLYPH[item.kind] || '?';
 }
 
 export function asciiColor(item) {
-  if (item.layer === 'agent') return '#cfc2a5';
+  if (item.layer === 'agent') return '#6e5a3d';
   if (item.kind === 'stack') return '#c3b597';
   if (item.layer === 'terrain') return TERRAIN_COLOR[item.kind] || '#777';
   return OBJECT_COLOR[item.kind] || '#aaa';
@@ -43,11 +43,8 @@ export class AsciiRenderer extends BaseRenderer {
     ctx.font = `bold ${Math.max(8, Math.floor(camera.cell * 0.75))}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(
-      glyph,
-      camera.offsetX + (item.x + 0.5) * camera.cell,
-      camera.offsetY + (item.y + 0.5) * camera.cell,
-    );
+    const point=item.layer==='agent'?this.agentWorldPoint(item):{x:item.x+.5,y:item.y+.5};
+    ctx.fillText(glyph,camera.offsetX+point.x*camera.cell,camera.offsetY+point.y*camera.cell);
   }
 
   tile(item, camera) {
@@ -63,13 +60,20 @@ export class AsciiRenderer extends BaseRenderer {
     this.mark(item, camera, stack.length > 1 ? '&' : asciiGlyph(item), asciiColor(item));
   }
 
-  agent(item, camera) {
+  agent(item, camera, options={}) {
     if (camera.cell >= 34) {
-      this.physicalCells(item, camera, asciiColor(item));
-      this.nose(item, camera);
+      if(options.showCollisions)this.collisionCells(item,camera);
+      this.triangle(item, camera);
       return;
     }
     this.mark(item, camera, asciiGlyph(item, camera.cell), asciiColor(item));
+  }
+
+  collisionCells(item,camera) {
+    const unit=camera.cell/3,ctx=this.ctx;
+    ctx.fillStyle='rgba(195, 181, 151, 0.68)';
+    for(const [mx,my] of item.collision_cells)ctx.fillRect(
+      camera.offsetX+mx*unit,camera.offsetY+my*unit,unit,unit);
   }
 
   physicalCells(item, camera, color) {
@@ -87,17 +91,18 @@ export class AsciiRenderer extends BaseRenderer {
     }
   }
 
-  nose(item, camera) {
+  triangle(item, camera) {
     const [dx = 0, dy = -1] = item.orientation || [];
     const ctx = this.ctx;
     const unit = camera.cell / 3;
-    const cx = camera.offsetX + (item.x + 0.5) * camera.cell;
-    const cy = camera.offsetY + (item.y + 0.5) * camera.cell;
-    ctx.fillStyle = '#6e5a3d';
+    const point=this.agentWorldPoint(item);
+    const cx=camera.offsetX+point.x*camera.cell,cy=camera.offsetY+point.y*camera.cell;
+    const half=unit*.42;
+    ctx.fillStyle = asciiColor(item);
     ctx.beginPath();
-    ctx.moveTo(cx + dx * unit * 1.15, cy + dy * unit * 1.15);
-    ctx.lineTo(cx + dy * unit * 0.42 - dx * unit * 0.2, cy - dx * unit * 0.42 - dy * unit * 0.2);
-    ctx.lineTo(cx - dy * unit * 0.42 - dx * unit * 0.2, cy + dx * unit * 0.42 - dy * unit * 0.2);
+    ctx.moveTo(cx + dx * unit * 1.45, cy + dy * unit * 1.45);
+    ctx.lineTo(cx + dy * half, cy - dx * half);
+    ctx.lineTo(cx - dy * half, cy + dx * half);
     ctx.closePath();
     ctx.fill();
   }

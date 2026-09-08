@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { SimulationStore } from '../../core/interface/static/store.mjs';
 import { candidatesAt, resolveSelection } from '../../core/interface/static/selection.mjs';
 import { AsciiRenderer, asciiGlyph } from '../../core/interface/static/renderers/ascii-renderer.mjs';
+import { BaseRenderer } from '../../core/interface/static/renderers/base-renderer.mjs';
 import { assertRenderer } from '../../core/interface/static/renderers/renderer-contract.mjs';
 import { cellRecords } from '../../core/interface/static/scene-model.mjs';
 
@@ -81,7 +82,8 @@ test('ascii renderer consumes a frozen scene and exposes the picking contract',(
 });
 
 test('ascii renderer culls layers and picks the visible interpolated agent without changing grid state',()=>{
-  const s=new SimulationStore();s.bootstrap(bootstrap());
+  const initial={...bootstrap(),agents:[{...agent,micro_position:[2,1],collision_cells:[[2,1],[2,0]]}]};
+  const s=new SimulationStore();s.bootstrap(initial);
   s.applyFrame({...bootstrap(),tick:1,agents:[{...agent,x:1,micro_position:[3,1],collision_cells:[[3,1],[3,0]]}]});
   const ctx=new Proxy({}, {get(t,k){return t[k]??(()=>{});},set(t,k,v){t[k]=v;return true;}});
   const r=new AsciiRenderer(),drawn=[];
@@ -91,14 +93,14 @@ test('ascii renderer culls layers and picks the visible interpolated agent witho
   assert.ok(drawn.every(i=>i.x===0&&i.y===0));
   r.resize({width:100,height:100});
   r.render(s.scene,{cell:24,offsetX:0,offsetY:0},{previous:s.previous,motionProgress:.1});
-  assert.equal(r.hitTest({x:14,y:12})[0].id,agent.id);
+  assert.equal(r.hitTest({x:21,y:12})[0].id,agent.id);
   assert.equal(s.scene.agents[0].x,1);
   r.dispose();
 });
 
 test('ascii renderer uses lod without inventing physical cells',()=>{
   assert.equal(asciiGlyph({...agent,cells:[[1,0],[0,1],[1,1],[2,1],[1,2]]}, 10), '@');
-  assert.equal(asciiGlyph({...agent,cells:[[1,0],[0,1],[1,1],[2,1],[1,2]]}, 24), '◉');
+  assert.equal(asciiGlyph({...agent,cells:[[1,0],[0,1],[1,1],[2,1],[1,2]]}, 24), '@');
   const calls=[];
   const ctx=new Proxy({}, {get(target,key){return target[key]??((...args)=>calls.push([key,...args]));},set(t,k,v){t[k]=v;return true;}});
   const renderer=new AsciiRenderer();
@@ -106,6 +108,50 @@ test('ascii renderer uses lod without inventing physical cells',()=>{
   renderer.resize({width:80,height:80,ratio:1});
   renderer.agent({...agent,cells:[[1,0],[0,1],[1,1],[2,1],[1,2]],orientation:[1,0]}, {cell:48,offsetX:0,offsetY:0});
 
-  assert.equal(calls.filter(([name])=>name==='fillRect').length >= 5, true);
+  assert.equal(calls.filter(([name])=>name==='fillRect').length, 0);
   assert.equal(calls.some(([name])=>name==='fillText'), false);
+  assert.equal(calls.some(([name])=>name==='fill'), true);
+});
+
+function drawingContext(calls=[]) {
+  return new Proxy({}, {
+    get(target,key) {
+      if (key === 'fillRect') return (...args)=>calls.push(['fillRect',target.fillStyle,...args]);
+      return target[key]??((...args)=>calls.push([key,...args]));
+    },
+    set(target,key,value) { target[key]=value; return true; },
+  });
+}
+
+test('renderer interpolates one adjacent microcell and never invents a skipped path',()=>{
+  class CaptureRenderer extends BaseRenderer {
+    tile(){} object(){} agent(item){this.drawn=item;}
+  }
+  const prior={...bootstrap(),agents:[{...agent,orientation:[1,0],micro_position:[2,1],collision_cells:[[2,1],[3,1]]}]};
+  const current={...bootstrap(),tick:1,agents:[{...agent,x:1,orientation:[1,0],micro_position:[3,1],collision_cells:[[3,1],[4,1]]}]};
+  const renderer=new CaptureRenderer();
+  renderer.mount({getContext:()=>drawingContext()});renderer.resize({width:200,height:200});
+  renderer.render(current,{cell:30,offsetX:0,offsetY:0},{previous:prior,motionProgress:.5});
+  assert.deepEqual(renderer.drawn.visual_micro_position,[2.5,1]);
+  assert.deepEqual(renderer.agentWorldPoint(renderer.drawn),{x:1,y:.5});
+  assert.equal(renderer.agentWorldPoint({...agent,micro_position:[3,1]}).x-
+    renderer.agentWorldPoint({...agent,micro_position:[0,1]}).x,1);
+
+  renderer.render({...current,tick:2},{cell:30,offsetX:0,offsetY:0},{previous:prior,motionProgress:.5});
+  assert.deepEqual(renderer.drawn.visual_micro_position,[3,1]);
+});
+
+test('close gaiano uses base and nose geometry and only draws collision cells when enabled',()=>{
+  const calls=[];
+  const renderer=new AsciiRenderer();
+  renderer.mount({getContext:()=>drawingContext(calls)});renderer.resize({width:200,height:200});
+  const data={...bootstrap(),objects:[],agents:[{...agent,orientation:[1,0],micro_position:[1,1],collision_cells:[[1,1],[2,1]]}]};
+  const store=new SimulationStore();store.bootstrap(data);const scene=store.scene;
+  renderer.render(scene,{cell:60,offsetX:0,offsetY:0},{showCollisions:false});
+  assert.equal(calls.filter(([name,color])=>name==='fillRect'&&color==='rgba(195, 181, 151, 0.68)').length,0);
+  calls.length=0;
+  renderer.render(scene,{cell:60,offsetX:0,offsetY:0},{showCollisions:true});
+  const collision=calls.filter(([name,color])=>name==='fillRect'&&color==='rgba(195, 181, 151, 0.68)');
+  assert.deepEqual(collision.map(call=>call.slice(2)),[[20,20,20,20],[40,20,20,20]]);
+  assert.equal(calls.some(([name])=>name==='fill'),true);
 });

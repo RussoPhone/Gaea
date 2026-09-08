@@ -13,6 +13,10 @@ export class BaseRenderer {
     this.ctx.setTransform(ratio,0,0,ratio,0,0);
     this.ctx.imageSmoothingEnabled=false;
   }
+  agentWorldPoint(agent) {
+    const [mx,my]=agent.visual_micro_position || agent.micro_position;
+    return {x:(mx+.5)/3,y:(my+.5)/3};
+  }
   render(scene,camera,options={}) {
     this.scene=scene; this.camera=camera;
     this.agentHits=[];
@@ -32,18 +36,29 @@ export class BaseRenderer {
       const prior=old.get(agent.id),p=options.motionProgress??1;
       // Only interpolate adjacent steps; skipped ticks must not invent paths through obstacles.
       const can=options.previous?.worldRevision===scene.worldRevision && scene.tick===options.previous.tick+1 &&
-        prior&&Math.abs(agent.x-prior.x)+Math.abs(agent.y-prior.y)===1;
-      const visual=can?{...agent,x:prior.x+(agent.x-prior.x)*p,y:prior.y+(agent.y-prior.y)*p}:agent;
-      this.agent(visual,camera);
-      this.agentHits.push({agent,x:camera.offsetX+(visual.x+.5)*camera.cell,
-        y:camera.offsetY+(visual.y+.5)*camera.cell});
+        prior&&Math.abs(agent.micro_position[0]-prior.micro_position[0])+
+          Math.abs(agent.micro_position[1]-prior.micro_position[1])===1;
+      const visualMicro=can?prior.micro_position.map((value,index)=>
+        value+(agent.micro_position[index]-value)*p):[...agent.micro_position];
+      const visual={...agent,visual_micro_position:visualMicro};
+      this.agent(visual,camera,options);
+      const point=this.agentWorldPoint(visual),unit=camera.cell/3;
+      const centers=[point,{x:point.x+agent.orientation[0]/3,y:point.y+agent.orientation[1]/3}];
+      this.agentHits.push({agent,centers:centers.map(({x,y})=>({
+        x:camera.offsetX+x*camera.cell,y:camera.offsetY+y*camera.cell})),radius:unit*.72});
     }
     const selected=resolveSelection(scene,options.selection);
     if(selected){
-      const x=Math.round(camera.offsetX+selected.x*camera.cell)+.5,y=Math.round(camera.offsetY+selected.y*camera.cell)+.5;
-      const size=Math.round(camera.cell)-1,arm=Math.max(3,Math.floor(size*.25));
+      const cells=selected.layer==='agent'?selected.collision_cells:null;
+      const left=cells?Math.min(...cells.map(c=>c[0]))/3:selected.x;
+      const top=cells?Math.min(...cells.map(c=>c[1]))/3:selected.y;
+      const right=cells?(Math.max(...cells.map(c=>c[0]))+1)/3:selected.x+1;
+      const bottom=cells?(Math.max(...cells.map(c=>c[1]))+1)/3:selected.y+1;
+      const x=Math.round(camera.offsetX+left*camera.cell)+.5,y=Math.round(camera.offsetY+top*camera.cell)+.5;
+      const width=Math.round((right-left)*camera.cell)-1,height=Math.round((bottom-top)*camera.cell)-1;
+      const arm=Math.max(3,Math.floor(Math.min(width,height)*.25));
       ctx.beginPath();
-      for(const [dx,dy,sx,sy] of [[0,0,1,1],[size,0,-1,1],[0,size,1,-1],[size,size,-1,-1]]){
+      for(const [dx,dy,sx,sy] of [[0,0,1,1],[width,0,-1,1],[0,height,1,-1],[width,height,-1,-1]]){
         ctx.moveTo(x+dx+sx*arm,y+dy);ctx.lineTo(x+dx,y+dy);ctx.lineTo(x+dx,y+dy+sy*arm);
       }
       ctx.strokeStyle='#282d25';ctx.lineWidth=3;ctx.stroke();
@@ -54,8 +69,9 @@ export class BaseRenderer {
     if(!this.scene||!this.camera)return[];
     // Pick a moving glyph where it is actually drawn, but return authoritative
     // records and the candidates of its logical cell, never interpolated state.
-    const visible=(this.agentHits||[]).map(hit=>({...hit,distance:Math.hypot(point.x-hit.x,point.y-hit.y)}))
-      .filter(hit=>hit.distance<=this.camera.cell*.4).sort((a,b)=>a.distance-b.distance)[0];
+    const visible=(this.agentHits||[]).map(hit=>({...hit,distance:Math.min(...hit.centers.map(center=>
+      Math.hypot(point.x-center.x,point.y-center.y)))}))
+      .filter(hit=>hit.distance<=hit.radius).sort((a,b)=>a.distance-b.distance)[0];
     if(visible)return candidatesAt(this.scene,visible.agent.x,visible.agent.y);
     const world=screenToWorld(this.camera,point.x,point.y);
     return candidatesAt(this.scene,Math.floor(world.x),Math.floor(world.y));
