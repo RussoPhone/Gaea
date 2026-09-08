@@ -85,3 +85,15 @@ def test_is_passable_ignora_a_propria_entidade():
 
     assert world.is_passable(2, 2) is False
     assert world.is_passable(2, 2, ignore_entity=entity) is True
+
+
+def test_world_reindexes_multiple_entities_in_one_tile():
+    world = World(2, 1)
+    a = Entity("a", "@", 0, 0)
+    b = Entity("b", "@", 1, 0)
+    world.add_entity(a, allow_occupied=True)
+    world.add_entity(b, allow_occupied=True)
+
+    assert world.reindex_entity(b, 0, 0, allow_occupied=True)
+    assert world.get_entities_at(0, 0) == (a, b)
+    assert (b.x, b.y) == (0, 0)
