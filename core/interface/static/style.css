@@ -126,11 +126,10 @@ kbd { font: inherit; font-size: 10px; color: #858d79; margin-left: 6px; }
   animation: inspector-in .16s ease-out;
 }
 #inspector-tabs, #inspector-tabs button,
-#inspector .history-list details[open], #inspector .reading-toolbar {
+#inspector .history-list details[open] {
   color: #fff;
 }
-#inspector-tabs *, #inspector .history-list details[open] *,
-#inspector .reading-toolbar * { color: #fff; }
+#inspector-tabs *, #inspector .history-list details[open] * { color: #fff; }
 @keyframes inspector-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
@@ -180,15 +179,16 @@ dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric
 #history-panel { padding: 0 12px 12px; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .reading-toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 9px 0; color: var(--muted); font-size: 10px; position: sticky; top: 0;
+  padding: 9px 0; color: #5b4d38; font-size: 10px; position: sticky; top: 0;
   background: var(--panel); z-index: 1;
 }
-.reading-toolbar button { font-size: 10px; min-height: 22px; padding: 3px 6px; }
-#history-status { margin: 0; color: #c3b18f; font-size: 11px; line-height: 1.6; }
+.reading-toolbar * { color: #5b4d38; }
+.reading-toolbar button { font-size: 10px; min-height: 22px; padding: 3px 6px; color: #5b4d38; }
+#history-status { margin: 0; color: #786a53; font-size: 11px; line-height: 1.6; }
 #history-status:empty { display: none; }
-.reading-note, .empty-reading { color: #aeb09c; font-size: 11px; line-height: 1.7; margin: 4px 0 12px; }
+.reading-note, .empty-reading { color: #756750; font-size: 11px; line-height: 1.7; margin: 4px 0 12px; }
 .empty-reading { padding: 16px 0; font-size: 12px; }
-.reading-count { font-size: 11px; color: #ccc2aa; margin: 4px 0 9px; }
+.reading-count { font-size: 11px; color: #786a53; margin: 4px 0 9px; }
 .history-head { display: grid; grid-template-columns: minmax(0,1fr) 88px 60px; gap: 8px; padding: 6px; font-size: 10px; color: var(--muted); border-bottom: 1px solid var(--line); }
 .history-list { list-style: none; margin: 0; padding: 0; }
 .history-list > li { border-bottom: 1px solid #3f4639; }
