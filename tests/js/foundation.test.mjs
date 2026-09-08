@@ -6,6 +6,7 @@ import { AsciiRenderer, asciiGlyph } from '../../core/interface/static/renderers
 import { BaseRenderer } from '../../core/interface/static/renderers/base-renderer.mjs';
 import { assertRenderer } from '../../core/interface/static/renderers/renderer-contract.mjs';
 import { cellRecords } from '../../core/interface/static/scene-model.mjs';
+import { parseTickRate } from '../../core/interface/static/control-values.mjs';
 
 const terrain = {id:'0,0',layer:'terrain',kind:'grass',x:0,y:0,blocking:false};
 const object = {id:2,layer:'object',kind:'stone',x:0,y:0,quantity:1};
@@ -14,6 +15,12 @@ const agent = {id:1,layer:'agent',kind:'gaiano',x:0,y:0,orientation:[0,-1],body:
 const bootstrap = () => ({schemaVersion:2,worldRevision:'one',tick:0,width:2,height:2,
   terrain:[terrain,...[[1,0],[0,1],[1,1]].map(([x,y])=>({...terrain,id:`${x},${y}`,x,y}))],objects:[object,{...object,id:3}],agents:[agent],events:[],
   catalog:[],config:{},control:{running:false,speed:20,remaining:0}});
+
+test('tick rate parser enforces server limits',()=>{
+  assert.equal(parseTickRate('0.1'),0.1);
+  assert.equal(parseTickRate('1250.5'),1250.5);
+  for(const value of ['', '0', '100000.1', 'NaN', 'Infinity'])assert.throws(()=>parseTickRate(value));
+});
 
 test('store applies dynamic frames atomically and preserves static terrain',()=>{
   const s=new SimulationStore();s.bootstrap(bootstrap());

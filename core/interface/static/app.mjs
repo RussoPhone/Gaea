@@ -7,6 +7,7 @@ import { AsciiRenderer,paintAsciiPreview } from './renderers/ascii-renderer.mjs'
 import { renderInspector } from './ui/inspector.mjs';
 import { renderAgentHistory } from './ui/agent-history.mjs';
 import { layerLabel } from './ui/inspection-format.mjs';
+import { parseTickRate } from './control-values.mjs';
 
 const $=id=>document.getElementById(id),canvas=$('world-canvas');
 const transport=new ObserverTransport(),store=new SimulationStore();
@@ -28,7 +29,7 @@ function paintKey(){
 }
 function resetReading(){readingRequest++;ui.tab='summary';ui.reading=null;ui.readingLoading=false;ui.readingError='';}
 function clearSelection(){ui.selection=null;ui.cell=null;ui.detail=null;ui.following=false;resetReading();chrome();dirty=true;}
-function chrome(){
+function chrome(forceSpeed=false){
   const scene=store.scene;if(!scene)return;
   const control=scene.control;
   const runState=control.running?'running':control.remaining?'burst':'paused';
@@ -38,12 +39,7 @@ function chrome(){
   $('run-state').textContent=runState==='running'?'EM CURSO':runState==='burst'?'RAJADA':'PAUSADA';
   $('run-state').dataset.state=runState;
   $('remaining-value').textContent=control.remaining?`${control.remaining} ticks restantes`:`${control.speed} ticks/s`;
-  if(document.activeElement!==$('speed-select')) {
-    if(![...$('speed-select').options].some(o=>Number(o.value)===control.speed)){
-      const o=document.createElement('option');o.value=control.speed;o.textContent=control.speed;$('speed-select').append(o);
-    }
-    $('speed-select').value=String(control.speed);
-  }
+  if(forceSpeed||document.activeElement!==$('speed-value'))$('speed-value').value=String(control.speed);
   $('step-button').disabled=controlBusy||control.running||control.remaining>0;
   $('run-button').classList.toggle('active',control.running);
   $('pause-button').classList.toggle('active',!control.running&&!control.remaining);
@@ -134,14 +130,14 @@ function poll(){
     finally{pollQueued=false;}
   });
 }
-function control(command,value){
+function control(command,value,{restoreSpeed=false}={}){
   if(controlBusy)return;
   controlBusy=true;
   for(const el of document.querySelectorAll('#time-controls button, #time-controls input, #time-controls select'))el.disabled=true;
   enqueue(async()=>{
     try{await transport.control(command,value);error();}
     catch(e){error(e.message);}
-    finally{controlBusy=false;for(const el of document.querySelectorAll('#time-controls button, #time-controls input, #time-controls select'))el.disabled=false;chrome();poll();}
+    finally{controlBusy=false;for(const el of document.querySelectorAll('#time-controls button, #time-controls input, #time-controls select'))el.disabled=false;chrome(restoreSpeed);poll();}
   });
 }
 let pointer=null;
@@ -196,7 +192,12 @@ $('show-collisions').onchange=e=>{ui.showCollisions=e.target.checked;dirty=true;
 $('run-button').onclick=()=>control('run');
 $('pause-button').onclick=()=>control('pause');
 $('step-button').onclick=()=>control('step');
-$('speed-select').onchange=e=>control('speed',Number(e.target.value));
+function commitSpeed(){
+  try{control('speed',parseTickRate($('speed-value').value),{restoreSpeed:true});}
+  catch(e){error(e.message);chrome(true);}
+}
+$('speed-value').onchange=commitSpeed;
+$('speed-value').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();commitSpeed();}};
 $('burst-form').onsubmit=e=>{e.preventDefault();control('burst',Number($('burst-value').value));};
 document.addEventListener('keydown',e=>{
   if(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey)return;

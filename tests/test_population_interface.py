@@ -238,9 +238,12 @@ def test_pagina_observadora_e_assets_sao_servidos():
             b"selection-candidates",
             b"time-controls",
             b"show-collisions",
+            b"speed-value",
         ):
             assert b'id="' + element_id + b'"' in html
         assert b"renderer-select" not in html
+        assert b"speed-select" not in html
+        assert b'type="number" min="0.1" max="100000" step="0.1"' in html
         assert b"Geometric" not in html
         assert b"Pseudo-3D" not in html
         assert b"chave ASCII" in html
