@@ -13,6 +13,8 @@
   --accent: #7f6f4d;
   --warn: #9d734d;
   --ok: #657a4e;
+  --dark-surface-ink: #f1ead9;
+  --dark-surface-muted: #d0c7b3;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -85,7 +87,7 @@ kbd { font: inherit; font-size: 10px; color: #858d79; margin-left: 6px; }
   align-items: flex-start; max-width: min(520px, calc(100% - 340px));
 }
 .map-tools button, #map-key > summary {
-  font-size: 11px; background: #252b23;
+  font-size: 11px; background: #252b23; color: var(--dark-surface-ink);
   border: 1px solid #484f40; padding: 5px 8px; min-height: 27px;
 }
 #map-key { position: relative; }
@@ -104,7 +106,7 @@ kbd { font: inherit; font-size: 10px; color: #858d79; margin-left: 6px; }
 .map-caption { position: absolute; left: 13px; bottom: 12px; pointer-events: none; font-size: 10px; color: #a4ac95; }
 #world-hover:not(:empty) {
   display: inline-block; padding: 5px 8px; background: #252b23;
-  border-left: 2px solid #a7997b; color: #d3cbb4;
+  border-left: 2px solid #a7997b; color: var(--dark-surface-ink);
 }
 #world-hover:not(:empty) + #map-hint { display: none; }
 #map-scale { position: absolute; right: 14px; bottom: 12px; font-size: 10px; color: #a4ac95; pointer-events: none; }
@@ -203,7 +205,7 @@ dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric
 #time-controls {
   display: flex; align-items: center; gap: 18px; padding: 8px 14px;
   border-top: 1px solid var(--line);
-  background: #252b23; font-size: 11px;
+  background: #252b23; color: var(--dark-surface-ink); font-size: 11px;
 }
 .playback-group { display: flex; gap: 0; }
 .playback-group button {
@@ -214,8 +216,8 @@ dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric
 .playback-group button.active {
   background: #3d4434; border-color: #8a8268; color: #e4d8ba; z-index: 1;
 }
-#time-controls label, #burst-form { display: flex; align-items: center; gap: 7px; color: var(--muted); }
-#time-controls select, #time-controls input { height: 27px; width: 57px; padding: 2px 5px; background: #2a3127; }
+#time-controls label, #burst-form { display: flex; align-items: center; gap: 7px; color: var(--dark-surface-muted); }
+#time-controls select, #time-controls input { height: 27px; width: 57px; padding: 2px 5px; background: #2a3127; color: var(--dark-surface-ink); }
 #burst-form { padding-left: 16px; border-left: 1px solid var(--line); }
 #burst-form button { font-size: 11px; }
 #remaining-value { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
