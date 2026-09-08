@@ -157,16 +157,20 @@ class PhysicalSpace:
                     return False
         return True
 
-    def visible_parts(self, viewer_x, viewer_y, layer, token, ignore=()):
+    def visible_parts_from_micro(self, viewer_micro_x, viewer_micro_y, layer, token, ignore=()):
         key = self._key(layer, token)
         cells = self.cells_for(layer, token)
-        origin = (
-            viewer_x * self.scale + self.scale // 2,
-            viewer_y * self.scale + self.scale // 2,
-        )
+        origin = (viewer_micro_x, viewer_micro_y)
         record = self._records[key]
         visible = []
         for local, cell in zip(record.visible_cells, cells):
             if self._line_clear(origin[0], origin[1], cell[0], cell[1], key, ignore):
                 visible.append(local)
         return tuple(visible)
+
+    def visible_parts(self, viewer_x, viewer_y, layer, token, ignore=()):
+        return self.visible_parts_from_micro(
+            viewer_x * self.scale + self.scale // 2,
+            viewer_y * self.scale + self.scale // 2,
+            layer, token, ignore,
+        )
