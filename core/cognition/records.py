@@ -22,6 +22,7 @@ class Observation:
     action: str | None = None
     signal: int | None = None
     action_target: int | None = None
+    shape: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

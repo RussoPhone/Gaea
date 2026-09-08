@@ -121,3 +121,44 @@ def test_target_of_observed_gesture_is_explicitly_present_in_sensory_input():
     assert gesture.action_target == obj.uid
     observed = [e for e in a.memory.experiences if e.source == 'observed']
     assert observed[-1].target == gesture.action_target
+
+
+def test_population_entities_have_real_microcell_shapes_in_physical_space():
+    s = arena()
+    a = s.spawn(2, 3)
+    obj = s.add_object(2, 3, (3, 4, 5))
+
+    assert len(s.physical.cells_for("agent", a.uid)) > 1
+    assert len(s.physical.cells_for("object", obj.uid)) >= 1
+
+
+def test_perception_projects_partial_visible_shape_without_hidden_effects():
+    s = arena()
+    a = s.spawn(2, 3)
+    a.orientation = (1, 0)
+    blocker = s.add_object(3, 3, (9, 9, 9), portable=False, ingestible=False, blocking=True)
+    target = s.add_object(4, 3, (3, 4, 5), effect=(-30, 0), shape=((0, 0), (1, 1), (2, 2)))
+
+    seen = next(o for o in s.perceive(a).items if o.token == target.uid)
+
+    assert seen.shape
+    assert tuple(seen.shape) != tuple(target.shape.cells)
+    encoded = json.dumps(asdict(seen))
+    assert "effect" not in encoded
+    assert "food" not in encoded
+    assert blocker.uid in s.objects
+
+
+def test_self_manipulation_experience_keeps_target_material_and_terrain_context():
+    s = arena()
+    a = s.spawn(2, 3)
+    obj = s.add_object(2, 3, (3, 4, 5), effect=(-30, 0), kind="food")
+
+    s.step({a.uid: population.Action("pick", target=obj.uid)})
+    experience = a.memory.experiences[-1]
+
+    assert experience.action == "pick"
+    assert experience.target == obj.uid
+    assert experience.signature == obj.appearance
+    assert experience.visible_change == ("changed",)
+    assert experience.context

@@ -8,6 +8,7 @@ from copy import deepcopy
 from core.ambient.world import World
 from core.ambient.tile import STONE
 from core.ambient.objects import PhysicalObject
+from core.ambient.physical_space import PhysicalSpace, Shape
 from core.being.organism import Organism
 from core.cognition.records import Action, Observation, View, Experience, local_signal
 from core.cognition.memory import RelationalMemory
@@ -66,6 +67,7 @@ class PopulationSimulation:
         self.config = config or PopulationConfig()
         self.rng = random.Random(self.config.seed)
         self.world = World(self.config.width, self.config.height)
+        self.physical = PhysicalSpace(self.config.width, self.config.height)
         self.tick = 0
         self.agents = {}
         self.objects = {}
@@ -83,15 +85,18 @@ class PopulationSimulation:
         for x, y in positions[:self.config.population]:
             self.spawn(x, y)
         # Appearance and physiological effects are separate scenario parameters.
-        signatures = [(13, 4, 2), (29, 7, 3), (41, 9, 1)]
+        resources = (
+            ((13, 4, 2), (-42., 0.), "food", True),
+            ((29, 7, 3), (0., -42.), "water", True),
+            ((41, 9, 1), (0., 0.), "stone", False),
+        )
         for i, (x, y) in enumerate(self.rng.sample(positions, self.config.objects)):
-            j = i % 3
-            effect = ((-42., 0.), (0., -42.), (0., 0.))[j]
-            self.add_object(x, y, signatures[j], effect, ingestible=j != 2)
+            signature, effect, kind, ingestible = resources[i % len(resources)]
+            self.add_object(x, y, signature, effect, ingestible=ingestible, kind=kind)
             # Only these two scenario populations have environmental production.
             # Moving an inert object must not duplicate it at its former position.
-            if j != 2:
-                self.sites.append((x, y, signatures[j], effect, True))
+            if kind != "stone":
+                self.sites.append((x, y, signature, effect, ingestible, kind))
 
     def _id(self):
         uid = self._next_id
@@ -115,19 +120,25 @@ class PopulationSimulation:
         a.signal_tick = -1
         a.motion = (0, 0)
         a.last_target = None
+        a.shape = Shape(((1, 0), (0, 1), (1, 1), (2, 1), (1, 2)))
         a.view = View((0., 0.), (), (), self.tick)
         # Dead reckoning is acquired motor feedback, not global map coordinates.
         a.odometry = (0, 0)
         self.agents[a.uid] = a
         self.world.add_entity(a)
+        self.physical.place("agent", a.uid, x, y, a.shape, blocks=True)
         return a
 
-    def add_object(self, x, y, appearance, effect=(0., 0.), portable=True, ingestible=True, quantity=1):
+    def add_object(self, x, y, appearance, effect=(0., 0.), portable=True, ingestible=True, quantity=1, kind="object",
+                   shape=None, blocking=False):
         if not self.world.is_inside(x, y) or quantity < 1:
             raise ValueError('objeto inválido')
-        obj = PhysicalObject(self._id(), x, y, tuple(appearance), tuple(effect), portable, ingestible, quantity)
+        obj_shape = Shape(tuple(shape)) if shape is not None else Shape()
+        obj = PhysicalObject(self._id(), x, y, tuple(appearance), tuple(effect), portable, ingestible,
+                             quantity, None, kind, obj_shape, bool(blocking))
         self.objects[obj.uid] = obj
         self.object_cells.setdefault((x, y), set()).add(obj.uid)
+        self.physical.place("object", obj.uid, x, y, obj.shape, blocks=obj.blocking)
         return obj
 
     def _detach(self, obj):
@@ -137,6 +148,7 @@ class PopulationSimulation:
                 ids.discard(obj.uid)
                 if not ids:
                     del self.object_cells[(obj.x, obj.y)]
+            self.physical.remove("object", obj.uid)
         else:
             holder = self.agents.get(obj.carrier)
             if holder:
@@ -146,6 +158,7 @@ class PopulationSimulation:
         self._detach(obj)
         obj.x, obj.y, obj.carrier = x, y, None
         self.object_cells.setdefault((x, y), set()).add(obj.uid)
+        self.physical.place("object", obj.uid, x, y, obj.shape, blocks=obj.blocking)
 
     def _line_clear(self, x0, y0, x1, y1):
         # Integer ray; the blocking endpoint itself remains visible.
@@ -164,6 +177,12 @@ class PopulationSimulation:
                 return False
         return True
 
+    def _shape_seen(self, viewer, layer, token):
+        try:
+            return self.physical.visible_parts(viewer.x, viewer.y, layer, token, ignore=(("agent", viewer.uid),))
+        except KeyError:
+            return ()
+
     def perceive(self, a):
         items, terrain = [], []
         reach = self.config.sensor_range
@@ -181,12 +200,15 @@ class PopulationSimulation:
                 terrain.append(Observation(-1, tile.appearance, dx, dy, tile.blocking))
                 for uid in sorted(self.object_cells.get((x, y), ())):
                     obj = self.objects[uid]
-                    items.append(Observation(uid, obj.appearance, dx, dy))
+                    shape = self._shape_seen(a, "object", uid)
+                    if shape:
+                        items.append(Observation(uid, obj.appearance, dx, dy, shape=shape))
                 other = self.world.get_entity_at(x, y)
                 if other is not None and other is not a:
                     signal = other.signal if self.tick-other.signal_tick <= 2 else None
                     items.append(Observation(other.uid, other.appearance, dx, dy, True,
-                                             other.motion, other.last_action, signal))
+                                             other.motion, other.last_action, signal,
+                                             shape=self._shape_seen(a, "agent", other.uid)))
         visible_tokens = {o.token for o in items}
         for i, item in enumerate(items):
             other = self.agents.get(item.token)
@@ -225,8 +247,12 @@ class PopulationSimulation:
         if action.verb == 'move':
             if abs(action.dx)+abs(action.dy) != 1:
                 return False
+            new_x, new_y = a.x + action.dx, a.y + action.dy
+            if not self.physical.can_place(a.uid, new_x, new_y, a.shape, ignore=("agent", a.uid)):
+                return False
             moved = self.world.move_entity(a, action.dx, action.dy)
             if moved:
+                self.physical.move("agent", a.uid, a.x, a.y)
                 a.orientation = (action.dx, action.dy)
                 a.motion = a.orientation
                 a.odometry = (a.odometry[0]+action.dx, a.odometry[1]+action.dy)
@@ -282,6 +308,7 @@ class PopulationSimulation:
             self._place(self.objects[a.carried], a.x, a.y)
         a.body.alive = False
         self.world.remove_entity(a)
+        self.physical.remove("agent", a.uid)
         del self.agents[a.uid]
         self.deaths += 1
         self._event(a.uid, 'death', position=(a.x, a.y), generation=a.generation)
@@ -291,11 +318,11 @@ class PopulationSimulation:
             return
         # Finite site flux and global standing stock bound; no population rescue.
         limit = max(self.config.objects * 2, len(self.sites))
-        for x, y, signature, effect, ingestible in self.sites:
+        for x, y, signature, effect, ingestible, kind in self.sites:
             if len(self.objects) >= limit:
                 break
             if not self.object_cells.get((x, y)):
-                self.add_object(x, y, signature, effect, ingestible=ingestible)
+                self.add_object(x, y, signature, effect, ingestible=ingestible, kind=kind)
 
     def _reproduce(self):
         if not self.config.reproduction:
@@ -364,7 +391,7 @@ class PopulationSimulation:
                 a.memory.record(Experience(self.tick, view.body, signature, action.verb, delta, success,
                     actor=a.uid, signal=local_signal(view), visible_change=change,
                     location=a.odometry, target=action.target,
-                    context=tuple(o.appearance for o in view.items[:8])))
+                    context=tuple(o.appearance for o in (*view.terrain[:4], *view.items[:8]))))
             self.action_counts[action.verb] += 1
             if success and action.verb in ('ingest', 'pick', 'drop', 'place', 'give', 'signal'):
                 self._event(a.uid, action.verb, target=action.target, delta=delta,
@@ -431,11 +458,14 @@ class PopulationSimulation:
                 perception=[asdict(o) for o in (*view.terrain, *view.items)],
                 memory=a.memory.snapshot(self.tick), decision=deepcopy(a.decision_system.last))
         return dict(tick=self.tick, width=self.world.width, height=self.world.height, light=1.,
-            terrain=[dict(x=x, y=y, appearance=t.appearance, blocking=t.blocking)
+            terrain=[dict(x=x, y=y, appearance=t.appearance, blocking=t.blocking,
+                          kind="ground" if t.tile_type == "grass" else t.tile_type)
                      for y, row in enumerate(self.world.tiles) for x, t in enumerate(row)],
-            objects=[dict(id=o.uid, x=o.x, y=o.y, appearance=o.appearance, quantity=o.quantity)
+            objects=[dict(id=o.uid, x=o.x, y=o.y, appearance=o.appearance, quantity=o.quantity,
+                          kind=o.kind, cells=o.shape.cells)
                      for o in self.objects.values() if o.carrier is None],
             agents=[dict(id=a.uid, x=a.x, y=a.y, orientation=a.orientation, alive=True, action=a.last_action,
                          carrying=self.objects[a.carried].appearance if a.carried is not None else None,
-                         body=dict(hunger=a.body.hunger, thirst=a.body.thirst), generation=a.generation)
+                         body=dict(hunger=a.body.hunger, thirst=a.body.thirst), generation=a.generation,
+                         cells=a.shape.cells)
                     for a in self.agents.values()], metrics=self.metrics(), events=deepcopy(list(self.events)), selected=selected)
