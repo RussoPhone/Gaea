@@ -67,9 +67,9 @@ O seletor fechado de velocidade é substituído por um campo numérico compacto 
 
 Enter ou saída do campo envia o comando `speed`. Um valor inválido não substitui o último valor confirmado pelo servidor. A falha usa o estado de erro já existente na interface, sem alterar o ritmo ativo. Atualizações recebidas no polling sincronizam o campo quando ele não está sendo editado.
 
-## Compatibilidade e migração
+## Compatibilidade e checkpoints
 
-Checkpoints anteriores podem conter somente `x`, `y` e uma forma local. Ao carregar esse estado, a migração posiciona a base em uma microcélula válida do tile existente, preferindo uma posição compatível com a orientação e sem colisão. Se o tile não comportar a forma, a restauração deve falhar explicitamente em vez de sobrepor corpos silenciosamente.
+Novos checkpoints preservam `micro_x`, `micro_y`, orientação e registros do espaço físico, e devem restaurar exatamente a mesma evolução. Checkpoints produzidos por outra revisão continuam rejeitados pelo contrato atual de `code_hash`; esta mudança não introduz migração heurística de estado antigo.
 
 APIs legadas de `World` podem continuar rejeitando dois ocupantes quando chamadas sem a opção física da simulação. Dentro de `PopulationSimulation`, ocupação grossa de tile é um índice multivalorado; bloqueio de agentes acontece exclusivamente no espaço físico fino.
 
@@ -83,7 +83,7 @@ Testes Python cobrem:
 - bloqueio por terreno, limites, objetos e outros Gaianos;
 - giro atômico bem-sucedido e bloqueado;
 - compartilhamento de tile sem sobreposição;
-- nascimento e restauração de checkpoint sem colisão;
+- nascimento e restauração exata de novos checkpoints;
 - percepção de todos os agentes observáveis no mesmo tile;
 - snapshot e projeção com microposição e células atuais.
 
