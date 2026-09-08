@@ -237,12 +237,15 @@ def test_pagina_observadora_e_assets_sao_servidos():
             b"inspector",
             b"selection-candidates",
             b"time-controls",
+            b"show-collisions",
         ):
             assert b'id="' + element_id + b'"' in html
         assert b"renderer-select" not in html
         assert b"Geometric" not in html
         assert b"Pseudo-3D" not in html
         assert b"chave ASCII" in html
+        assert b'id="show-collisions" type="checkbox"' in html
+        assert b'id="show-collisions" type="checkbox" checked' not in html
         for asset in (
             "app.mjs",
             "camera.mjs",

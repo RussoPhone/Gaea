@@ -11,7 +11,7 @@ import { layerLabel } from './ui/inspection-format.mjs';
 const $=id=>document.getElementById(id),canvas=$('world-canvas');
 const transport=new ObserverTransport(),store=new SimulationStore();
 const ui={camera:null,selection:null,cell:null,detail:null,following:false,
-  tab:'summary',reading:null,readingLoading:false,readingError:''};
+  tab:'summary',reading:null,readingLoading:false,readingError:'',showCollisions:false};
 let readingRequest=0;
 let renderer,snapshotAt=0,dirty=true,pollQueued=false,controlBusy=false;
 let tail=Promise.resolve(),timer=null;
@@ -192,6 +192,7 @@ for(const button of document.querySelectorAll('[data-tab]')){
   });
 }
 $('follow-agent').onclick=()=>{ui.following=!ui.following;const a=resolveSelection(store.scene,ui.selection);if(a&&ui.following)ui.camera=centerCameraOn(ui.camera,a.x,a.y,viewport());chrome();dirty=true;};
+$('show-collisions').onchange=e=>{ui.showCollisions=e.target.checked;dirty=true;};
 $('run-button').onclick=()=>control('run');
 $('pause-button').onclick=()=>control('pause');
 $('step-button').onclick=()=>control('step');
@@ -213,7 +214,8 @@ new ResizeObserver(()=>{renderer?.resize(viewport());dirty=true;}).observe(canva
 function draw(now){
   const p=reducedMotion.matches?1:Math.min(1,(now-snapshotAt)/150);
   if(renderer&&ui.camera&&store.scene&&(dirty||p<1)){
-    renderer.render(store.scene,ui.camera,{selection:ui.selection,previous:store.previous,motionProgress:p});
+    renderer.render(store.scene,ui.camera,{selection:ui.selection,previous:store.previous,
+      motionProgress:p,showCollisions:ui.showCollisions});
     $('map-scale').textContent=`1 célula · ${Math.round(ui.camera.cell)} px`;
     dirty=p<1;
   }
