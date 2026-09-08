@@ -103,8 +103,8 @@ class PopulationSimulation:
         self._next_id += 1
         return uid
 
-    def spawn(self, x, y, generation=0):
-        if not self.world.is_passable(x, y):
+    def spawn(self, x, y, generation=0, micro_position=None):
+        if not self.world.is_passable(x, y, allow_occupied=True):
             raise ValueError('posição de nascimento indisponível')
         a = Organism('gaiano', '@', x, y)
         a.uid = self._id()
@@ -120,14 +120,69 @@ class PopulationSimulation:
         a.signal_tick = -1
         a.motion = (0, 0)
         a.last_target = None
-        a.shape = Shape(((1, 0), (0, 1), (1, 1), (2, 1), (1, 2)))
+        a.shape = self._agent_shape(a.orientation)
         a.view = View((0., 0.), (), (), self.tick)
         # Dead reckoning is acquired motor feedback, not global map coordinates.
         a.odometry = (0, 0)
+        candidates = [tuple(micro_position)] if micro_position is not None else [
+            (x * self.physical.scale + dx, y * self.physical.scale + dy)
+            for dy in range(self.physical.scale) for dx in range(self.physical.scale)
+        ]
+        if micro_position is None:
+            self.rng.shuffle(candidates)
+        base = next((candidate for candidate in candidates
+                     if self._position_available(*candidate, a.orientation)), None)
+        if base is None or (base[0] // self.physical.scale, base[1] // self.physical.scale) != (x, y):
+            raise ValueError('posição de nascimento indisponível')
+        a.micro_x, a.micro_y = base
         self.agents[a.uid] = a
-        self.world.add_entity(a)
-        self.physical.place("agent", a.uid, x, y, a.shape, blocks=True)
+        self.world.add_entity(a, allow_occupied=True)
+        self.physical.place_cells("agent", a.uid, self._agent_cells(*base, a.orientation), blocks=True,
+                                  visible_cells=a.shape.cells)
         return a
+
+    @staticmethod
+    def _agent_shape(orientation):
+        dx, dy = orientation
+        return Shape(((0, 0), (dx, dy)))
+
+    @staticmethod
+    def _agent_cells(micro_x, micro_y, orientation):
+        dx, dy = orientation
+        return ((micro_x, micro_y), (micro_x + dx, micro_y + dy))
+
+    def _terrain_allows(self, cells):
+        for micro_x, micro_y in cells:
+            if not self.physical._inside_micro(micro_x, micro_y):
+                return False
+            tile = self.world.get_tile(micro_x // self.physical.scale, micro_y // self.physical.scale)
+            if tile.blocking:
+                return False
+        return True
+
+    def _position_available(self, micro_x, micro_y, orientation, ignore=None):
+        cells = self._agent_cells(micro_x, micro_y, orientation)
+        return self._terrain_allows(cells) and self.physical.can_place_cells(
+            cells, ignore=ignore, blocks=True)
+
+    def _set_agent_position(self, a, micro_x, micro_y, orientation):
+        key = ("agent", a.uid)
+        cells = self._agent_cells(micro_x, micro_y, orientation)
+        if not self._position_available(micro_x, micro_y, orientation, ignore=key):
+            return False
+        old_cells = self.physical.cells_for("agent", a.uid)
+        old_visible = a.shape.cells
+        shape = self._agent_shape(orientation)
+        if not self.physical.move_cells("agent", a.uid, cells, visible_cells=shape.cells):
+            return False
+        tile_x, tile_y = micro_x // self.physical.scale, micro_y // self.physical.scale
+        if not self.world.reindex_entity(a, tile_x, tile_y, allow_occupied=True):
+            self.physical.move_cells("agent", a.uid, old_cells, visible_cells=old_visible)
+            return False
+        a.micro_x, a.micro_y = micro_x, micro_y
+        a.shape = shape
+        a.orientation = tuple(orientation)
+        return True
 
     def add_object(self, x, y, appearance, effect=(0., 0.), portable=True, ingestible=True, quantity=1, kind="object",
                    shape=None, blocking=False):
@@ -179,7 +234,8 @@ class PopulationSimulation:
 
     def _shape_seen(self, viewer, layer, token):
         try:
-            return self.physical.visible_parts(viewer.x, viewer.y, layer, token, ignore=(("agent", viewer.uid),))
+            return self.physical.visible_parts_from_micro(
+                viewer.micro_x, viewer.micro_y, layer, token, ignore=(("agent", viewer.uid),))
         except KeyError:
             return ()
 
@@ -203,8 +259,9 @@ class PopulationSimulation:
                     shape = self._shape_seen(a, "object", uid)
                     if shape:
                         items.append(Observation(uid, obj.appearance, dx, dy, shape=shape))
-                other = self.world.get_entity_at(x, y)
-                if other is not None and other is not a:
+                for other in self.world.get_entities_at(x, y):
+                    if other is a:
+                        continue
                     signal = other.signal if self.tick-other.signal_tick <= 2 else None
                     items.append(Observation(other.uid, other.appearance, dx, dy, True,
                                              other.motion, other.last_action, signal,
@@ -247,20 +304,17 @@ class PopulationSimulation:
         if action.verb == 'move':
             if abs(action.dx)+abs(action.dy) != 1:
                 return False
-            new_x, new_y = a.x + action.dx, a.y + action.dy
-            if not self.physical.can_place(a.uid, new_x, new_y, a.shape, ignore=("agent", a.uid)):
-                return False
-            moved = self.world.move_entity(a, action.dx, action.dy)
+            orientation = (action.dx, action.dy)
+            moved = self._set_agent_position(
+                a, a.micro_x + action.dx, a.micro_y + action.dy, orientation)
             if moved:
-                self.physical.move("agent", a.uid, a.x, a.y)
-                a.orientation = (action.dx, action.dy)
                 a.motion = a.orientation
                 a.odometry = (a.odometry[0]+action.dx, a.odometry[1]+action.dy)
             return moved
         if action.verb == 'turn':
             x, y = a.orientation
-            a.orientation = (-y, x) if action.value >= 0 else (y, -x)
-            return True
+            orientation = (-y, x) if action.value >= 0 else (y, -x)
+            return self._set_agent_position(a, a.micro_x, a.micro_y, orientation)
         if action.verb in ('wait', 'inspect'):
             return True
         if action.verb == 'signal':
@@ -339,8 +393,11 @@ class PopulationSimulation:
             adjacent = [(a.x+dx, a.y+dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
             self.rng.shuffle(adjacent)
             for x, y in adjacent:
-                if self.world.is_passable(x, y):
+                try:
                     child = self.spawn(x, y, a.generation+1)
+                except ValueError:
+                    continue
+                else:
                     child.body.hunger = child.body.thirst = 35.
                     a.body.hunger += 35.
                     a.body.thirst += 35.

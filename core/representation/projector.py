@@ -36,7 +36,8 @@ class RepresentationProjector:
         carried = self._simulation.objects.get(a.carried)
         return AgentView(a.uid, a.x, a.y, tuple(a.orientation), a.last_action,
             BodyView(a.body.hunger, a.body.thirst), a.generation, a.age,
-            self._object(carried) if carried else None, tuple(a.shape.cells))
+            self._object(carried) if carried else None, (a.micro_x, a.micro_y),
+            self._simulation.physical.cells_for('agent', a.uid))
 
     def _revision(self):
         s = self._simulation

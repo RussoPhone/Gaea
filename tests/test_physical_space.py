@@ -48,3 +48,26 @@ def test_visible_parts_return_only_microcells_not_hidden_by_blockers():
 
     assert visible
     assert visible != wide.cells
+
+
+def test_absolute_cells_move_atomically_across_tile_boundaries():
+    space = PhysicalSpace(2, 1, scale=3)
+    space.place_cells("agent", 1, ((2, 1), (3, 1)), blocks=True)
+
+    assert space.cells_for("agent", 1) == ((2, 1), (3, 1))
+
+    space.place_cells("agent", 2, ((4, 1),), blocks=True)
+    assert not space.move_cells("agent", 1, ((3, 1), (4, 1)))
+    assert space.cells_for("agent", 1) == ((2, 1), (3, 1))
+
+
+def test_absolute_cells_keep_visible_shape_separate_from_occupancy():
+    space = PhysicalSpace(2, 1, scale=3)
+    space.place_cells(
+        "agent", 1, ((2, 1), (3, 1)), blocks=True,
+        visible_cells=((0, 0), (1, 0)),
+    )
+
+    assert space.local_cells_for("agent", 1) == ((0, 0), (1, 0))
+    assert space.tokens_at_tile(0, 0) == (("agent", 1),)
+    assert space.tokens_at_tile(1, 0) == (("agent", 1),)

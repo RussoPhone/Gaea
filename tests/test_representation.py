@@ -17,7 +17,7 @@ def test_bootstrap_and_frame_have_explicit_layers_and_preserve_grass():
     p = RepresentationProjector(s)
     b = p.bootstrap()
     f = p.frame()
-    assert b['schemaVersion'] == 1
+    assert b['schemaVersion'] == 2
     assert b['worldRevision'] == f['worldRevision']
     assert len(b['terrain']) == 120
     assert {t['kind'] for t in b['terrain']} == {'grass', 'stone'}
@@ -113,7 +113,7 @@ def test_carried_object_uses_carrier_position_and_is_not_duplicated_on_ground():
     assert obj.uid not in {item['id'] for item in p.frame()['objects']}
 
 
-def test_projection_exposes_physical_cells_without_internal_effects():
+def test_projection_exposes_microcell_agent_geometry_without_internal_effects():
     s = simulation()
     a = next(iter(s.agents.values()))
     obj = s.add_object(a.x, a.y, (13, 4, 2), effect=(-99, 0), shape=((0, 0), (1, 1), (2, 2)))
@@ -122,7 +122,10 @@ def test_projection_exposes_physical_cells_without_internal_effects():
     agent = p.agent(a.uid)
     projected = p.object(obj.uid)
 
-    assert len(agent["cells"]) > 1
+    assert agent["micro_position"] == (a.micro_x, a.micro_y)
+    assert agent["collision_cells"] == s.physical.cells_for("agent", a.uid)
+    assert (agent["x"], agent["y"]) == (a.micro_x // 3, a.micro_y // 3)
+    assert len(agent["collision_cells"]) == 2
     assert projected["cells"] == ((0, 0), (1, 1), (2, 2))
     assert "effect" not in projected
 

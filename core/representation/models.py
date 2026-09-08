@@ -1,8 +1,8 @@
-"""Version 1 public records; coordinates are integer world cells."""
+"""Version 2 public records; agents expose coarse and microcell positions."""
 from dataclasses import dataclass
 from typing import Literal
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +48,7 @@ class AgentView:
     generation: int
     age: int
     carrying: ObjectView | None
-    cells: tuple[tuple[int, int], ...]
+    micro_position: tuple[int, int]
+    collision_cells: tuple[tuple[int, int], tuple[int, int]]
     kind: str = 'gaiano'
     layer: Literal['agent'] = 'agent'

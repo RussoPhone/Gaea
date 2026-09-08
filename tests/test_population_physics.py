@@ -132,6 +132,57 @@ def test_population_entities_have_real_microcell_shapes_in_physical_space():
     assert len(s.physical.cells_for("object", obj.uid)) >= 1
 
 
+def test_gaiano_occupies_base_and_nose_and_moves_one_microcell():
+    s = arena()
+    a = s.spawn(2, 2, micro_position=(7, 7))
+    assert s._set_agent_position(a, 7, 7, (1, 0))
+
+    assert s.physical.cells_for("agent", a.uid) == ((7, 7), (8, 7))
+    assert s._apply(a, population.Action("move", dx=1, dy=0))
+    assert (a.micro_x, a.micro_y) == (8, 7)
+    assert (a.x, a.y) == (2, 2)
+    assert a.odometry == (1, 0)
+
+
+def test_three_microsteps_cross_one_tile_width():
+    s = arena()
+    a = s.spawn(2, 2, micro_position=(6, 7))
+
+    for _ in range(3):
+        assert s._apply(a, population.Action("move", dx=1, dy=0))
+
+    assert (a.micro_x, a.micro_y) == (9, 7)
+    assert (a.x, a.y) == (3, 2)
+
+
+def test_nose_cannot_enter_blocking_terrain_before_base():
+    from core.ambient.tile import STONE
+
+    s = arena()
+    a = s.spawn(2, 2, micro_position=(7, 7))
+    assert s._set_agent_position(a, 7, 7, (1, 0))
+    s.world.set_tile(3, 2, STONE)
+    before = (a.micro_x, a.micro_y, a.x, a.y, a.orientation, a.odometry,
+              s.physical.cells_for("agent", a.uid))
+
+    assert not s._apply(a, population.Action("move", dx=1, dy=0))
+    assert (a.micro_x, a.micro_y, a.x, a.y, a.orientation, a.odometry,
+            s.physical.cells_for("agent", a.uid)) == before
+
+
+def test_turn_fails_atomically_when_new_nose_cell_is_occupied():
+    s = arena()
+    a = s.spawn(2, 2, micro_position=(7, 7))
+    blocker = s.spawn(2, 2, micro_position=(8, 7))
+    before = (a.orientation, s.physical.cells_for("agent", a.uid))
+
+    assert not s._apply(a, population.Action("turn", value=1))
+    assert (a.orientation, s.physical.cells_for("agent", a.uid)) == before
+    assert set(s.physical.cells_for("agent", a.uid)).isdisjoint(
+        s.physical.cells_for("agent", blocker.uid)
+    )
+
+
 def test_perception_projects_partial_visible_shape_without_hidden_effects():
     s = arena()
     a = s.spawn(2, 3)

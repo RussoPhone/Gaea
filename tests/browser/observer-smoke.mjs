@@ -47,8 +47,18 @@ try {
   const bootstrap = await (await fetch(`${url}/api/bootstrap`)).json();
   assert.equal(await uiTick(),0);
   assert.equal(await page.locator('#inspector').isVisible(),false);
+  assert.equal(await page.locator('#show-collisions').isChecked(),false);
   const box = await page.locator('#world-canvas').boundingBox();
   assert.ok(box.width*box.height/(1280*800)>=.85);
+  const collisionFrame=await frame();
+  const canvasBefore=await page.locator('#world-canvas').evaluate(canvas=>canvas.toDataURL());
+  await page.locator('#show-collisions').check();
+  await page.waitForTimeout(100);
+  const canvasAfter=await page.locator('#world-canvas').evaluate(canvas=>canvas.toDataURL());
+  assert.notEqual(canvasAfter,canvasBefore);
+  assert.deepEqual(await frame(),collisionFrame,'collision overlay must be purely observational');
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('#show-collisions').isChecked(),true);
 
   await page.locator('#run-button').click();
   await page.waitForFunction(()=>Number(document.querySelector('#tick-value').textContent.split(' ')[1])>=4);
@@ -59,9 +69,16 @@ try {
   assert.equal((await frame()).tick,paused.tick);
   await page.locator('#step-button').click();
   await waitTick(paused.tick+1);
-  await page.locator('#speed-select').selectOption('60');
-  await page.waitForFunction(()=>document.querySelector('#remaining-value').textContent==='60 ticks/s');
-  assert.equal((await frame()).control.speed,60);
+  await page.locator('#speed-value').fill('37.5');
+  await page.locator('#speed-value').press('Enter');
+  await page.waitForFunction(()=>document.querySelector('#remaining-value').textContent==='37.5 ticks/s');
+  assert.equal((await frame()).control.speed,37.5);
+  assert.equal(await page.locator('#speed-value').inputValue(),'37.5');
+  await page.locator('#speed-value').fill('100000.1');
+  await page.locator('#speed-value').press('Enter');
+  await page.waitForTimeout(100);
+  assert.equal((await frame()).control.speed,37.5);
+  assert.equal(await page.locator('#speed-value').inputValue(),'37.5');
   paused=await frame();
   await page.locator('#burst-value').fill('3');
   await page.locator('#burst-form button').click();

@@ -1,8 +1,11 @@
 import { makeScene } from './scene-model.mjs';
 
 function envelope(data) {
-  if (data?.schemaVersion !== 1 || typeof data.worldRevision !== 'string' ||
+  if (data?.schemaVersion !== 2 || typeof data.worldRevision !== 'string' ||
       !Number.isInteger(data.tick) || data.tick < 0) throw new Error('Representação incompatível');
+}
+function pair(value) {
+  return Array.isArray(value) && value.length === 2 && value.every(Number.isInteger);
 }
 function records(items, layer) {
   if (!Array.isArray(items)) throw new Error(`Camada ${layer} ausente`);
@@ -18,11 +21,26 @@ function records(items, layer) {
       throw new Error('Quantidade inválida');
     if (layer === 'agent') {
       if (!Number.isFinite(item.body?.hunger) || !Number.isFinite(item.body?.thirst) ||
-          !Array.isArray(item.orientation) || item.orientation.length !== 2 ||
-          !item.orientation.every(Number.isInteger)) throw new Error('Agente inválido');
+          !pair(item.orientation) || !pair(item.micro_position) ||
+          !Array.isArray(item.collision_cells) || item.collision_cells.length !== 2 ||
+          !item.collision_cells.every(pair)) throw new Error('Agente inválido');
       if (item.carrying) records([item.carrying], 'object');
     }
     ids.add(String(item.id));
+  }
+}
+function agentGeometry(items, width, height) {
+  const maxX = width * 3, maxY = height * 3;
+  for (const item of items) {
+    const [base, nose] = item.collision_cells;
+    const [mx, my] = item.micro_position;
+    if (base[0] !== mx || base[1] !== my ||
+        Math.abs(nose[0] - mx) + Math.abs(nose[1] - my) !== 1 ||
+        nose[0] - mx !== item.orientation[0] || nose[1] - my !== item.orientation[1] ||
+        item.x !== Math.floor(mx / 3) || item.y !== Math.floor(my / 3) ||
+        item.collision_cells.some(([x,y])=>x<0 || y<0 || x>=maxX || y>=maxY)) {
+      throw new Error('Geometria física inválida');
+    }
   }
 }
 function dynamics(data) {
@@ -44,6 +62,7 @@ export class SimulationStore {
         data.width < 1 || data.height < 1) throw new Error('Dimensões inválidas');
     if (data.terrain.length !== data.width * data.height) throw new Error('Terreno incompleto');
     bounds([...data.terrain,...data.objects,...data.agents],data.width,data.height);
+    agentGeometry(data.agents,data.width,data.height);
     const scene = makeScene(structuredClone(data));
     this.previous = null;
     this.scene = scene;
@@ -55,6 +74,7 @@ export class SimulationStore {
     if (data.tick < this.scene.tick) return 'stale';
     dynamics(data);
     bounds([...data.objects,...data.agents],this.scene.width,this.scene.height);
+    agentGeometry(data.agents,this.scene.width,this.scene.height);
     const dynamic = structuredClone({tick:data.tick, agents:data.agents, objects:data.objects,
       events:data.events || [], control:data.control, population:data.population});
     const next = makeScene({...this.scene, ...dynamic});

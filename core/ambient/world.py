@@ -77,43 +77,57 @@ class World: #Aqui fica o mundo gerado. Diferente do renderer, esse aqui é com 
     def is_inside(self, x, y):
         return x >= 0 and x < self.width and y >= 0 and y < self.height
 
-    def add_entity(self, entity):
+    def add_entity(self, entity, allow_occupied=False):
         if not self.is_inside(entity.x, entity.y):
             raise ValueError(f"entidade fora do mundo: x={entity.x}, y={entity.y}")
 
-        if self.get_entity_at(entity.x, entity.y) is not None:
+        if not allow_occupied and self.get_entity_at(entity.x, entity.y) is not None:
             raise ValueError("posição já ocupada")
         self.entities.append(entity)
-        self.occupancy[(entity.x, entity.y)] = entity
+        self.occupancy.setdefault((entity.x, entity.y), []).append(entity)
 
     def get_entity_at(self, x, y):
-        return self.occupancy.get((x, y))
+        entities = self.occupancy.get((x, y), ())
+        return entities[0] if entities else None
+
+    def get_entities_at(self, x, y):
+        return tuple(self.occupancy.get((x, y), ()))
 
     def remove_entity(self, entity):
-        self.occupancy.pop((entity.x, entity.y), None)
+        key = (entity.x, entity.y)
+        occupants = self.occupancy.get(key, [])
+        if entity in occupants:
+            occupants.remove(entity)
+        if not occupants:
+            self.occupancy.pop(key, None)
         self.entities.remove(entity)
+
+    def reindex_entity(self, entity, x, y, *, allow_occupied=False):
+        if not self.is_passable(x, y, ignore_entity=entity, allow_occupied=allow_occupied):
+            return False
+        old_key = (entity.x, entity.y)
+        occupants = self.occupancy.get(old_key, [])
+        if entity in occupants:
+            occupants.remove(entity)
+        if not occupants:
+            self.occupancy.pop(old_key, None)
+        entity.x, entity.y = x, y
+        self.occupancy.setdefault((x, y), []).append(entity)
+        return True
 
     def move_entity(self, entity, dx, dy):
         new_x = entity.x + dx
         new_y = entity.y + dy
 
-        if not self.is_passable(new_x, new_y, ignore_entity=entity):
-            return False
+        return self.reindex_entity(entity, new_x, new_y)
 
-        self.occupancy.pop((entity.x, entity.y), None)
-        entity.x = new_x
-        entity.y = new_y
-        self.occupancy[(new_x, new_y)] = entity
-
-        return True
-
-    def is_passable(self, x, y, ignore_entity=None):
+    def is_passable(self, x, y, ignore_entity=None, allow_occupied=False):
         if not self.is_inside(x, y):
             return False
         tile = self.get_tile(x, y)
         if tile.blocking:
             return False
-        ocupante = self.get_entity_at(x, y)
-        if ocupante is not None and ocupante is not ignore_entity:
+        occupants = self.get_entities_at(x, y)
+        if not allow_occupied and any(entity is not ignore_entity for entity in occupants):
             return False
         return True 

@@ -26,6 +26,7 @@
     <div class="map-tools">
       <button id="fit-world" title="Enquadrar (0)">enquadrar <kbd>0</kbd></button>
       <button id="follow-agent" title="Acompanhar (F)" disabled>acompanhar <kbd>F</kbd></button>
+      <label class="collision-control"><input id="show-collisions" type="checkbox"> colisão</label>
       <details id="map-key">
         <summary>chave ASCII</summary>
         <div class="symbol-key">
@@ -76,7 +77,7 @@
       <button id="pause-button" title="Pausar (Espaço)"><span aria-hidden="true">Ⅱ</span> pause</button>
       <button id="step-button" title="Um tick (.)"><span aria-hidden="true">›|</span> step</button>
     </div>
-    <label class="speed-control">ritmo <select id="speed-select" aria-label="Velocidade em ticks por segundo"><option>2</option><option>10</option><option selected>20</option><option>60</option><option>200</option></select><span>ticks/s</span></label>
+    <label class="speed-control">ritmo <input id="speed-value" type="number" min="0.1" max="100000" step="0.1" value="20" inputmode="decimal" aria-label="Velocidade em ticks por segundo"><span>ticks/s</span></label>
     <form id="burst-form"><label for="burst-value">rajada</label><input id="burst-value" aria-label="Ticks na rajada" type="number" min="1" max="1000000" value="100"><span>ticks</span><button>executar</button></form>
     <span id="remaining-value"></span>
   </nav>
