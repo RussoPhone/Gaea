@@ -54,20 +54,33 @@ function chrome(forceSpeed=false){
     $('history-status').textContent=ui.readingLoading?'Lendo registros…':ui.readingError;
     renderAgentHistory($('history-content'),ui.reading?.detail,ui.tab);
   }
-  const candidates=$('selection-candidates');candidates.replaceChildren();
+  const candidates=$('selection-candidates');
   if(item) {
     // A selected entity follows its real cell; terrain selection stays fixed.
     ui.cell={x:item.x,y:item.y};
+    const current=new Map([...candidates.children].map(button=>
+      [`${button.dataset.layer}:${button.dataset.id}`,button]));
+    const ordered=[];
     for(const candidate of candidatesAt(scene,item.x,item.y)){
-      const button=document.createElement('button');
-      const layer=document.createElement('span'),name=document.createElement('span'),id=document.createElement('span');
-      layer.className='candidate-layer';layer.textContent=layerLabel(candidate.layer);
-      name.textContent=candidate.kind;id.className='candidate-id';id.textContent=candidate.layer==='terrain'?'':`#${candidate.id}`;
-      button.append(layer,name,id);
-      button.dataset.layer=candidate.layer;button.dataset.id=candidate.id;
+      const key=`${candidate.layer}:${candidate.id}`;
+      const button=current.get(key)||document.createElement('button');
+      if(!current.has(key)){
+        const layer=document.createElement('span'),name=document.createElement('span'),id=document.createElement('span');
+        layer.className='candidate-layer';id.className='candidate-id';button.append(layer,name,id);
+        button.dataset.layer=candidate.layer;button.dataset.id=candidate.id;
+        button.addEventListener('click',()=>select({layer:candidate.layer,id:candidate.id}));
+      }
+      const parts=button.children;
+      parts[0].textContent=layerLabel(candidate.layer);parts[1].textContent=candidate.kind;
+      parts[2].textContent=candidate.layer==='terrain'?'':`#${candidate.id}`;
       button.classList.toggle('active',candidate.layer===item.layer&&candidate.id===item.id);
-      button.addEventListener('click',()=>select(candidate));candidates.append(button);
+      current.delete(key);ordered.push(button);
     }
+    for(const button of current.values())button.remove();
+    ordered.forEach((button,index)=>{if(candidates.children[index]!==button)
+      candidates.insertBefore(button,candidates.children[index]||null);});
+  } else {
+    candidates.replaceChildren();
   }
 }
 function select(item){ui.selection=selectionKey(item);ui.detail=null;ui.following=false;resetReading();chrome();dirty=true;poll();}

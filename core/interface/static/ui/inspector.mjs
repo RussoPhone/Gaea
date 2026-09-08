@@ -2,37 +2,64 @@ import { cellRecords } from '../scene-model.mjs';
 import { paintAsciiPreview } from '../renderers/ascii-renderer.mjs';
 import { actionLabel, directionLabel, layerLabel } from './inspection-format.mjs';
 
-function addField(fields, label, value) {
-  const dt = document.createElement('dt');
-  const dd = document.createElement('dd');
-  dt.textContent = label;
-  dd.textContent = String(value ?? '—');
-  fields.append(dt, dd);
+function rowsFor(fields) {
+  const rows = new Map();
+  for (const dt of fields.querySelectorAll(':scope > dt')) {
+    rows.set(dt.dataset.field, [dt, dt.nextElementSibling]);
+  }
+  return rows;
 }
 
-function addMeter(fields, label, value) {
+function rowFor(fields, rows, label) {
+  let row = rows.get(label);
+  if (row) rows.delete(label);
+  else {
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.dataset.field = label;
+    dt.textContent = label;
+    fields.append(dt, dd);
+    row = [dt, dd];
+  }
+  return row;
+}
+
+function addField(fields, rows, label, value) {
+  const [, dd] = rowFor(fields, rows, label);
+  if (dd.className || dd.childElementCount) {
+    dd.className = '';
+    dd.replaceChildren();
+  }
+  dd.textContent = String(value ?? '—');
+}
+
+function addMeter(fields, rows, label, value) {
   const level = value >= 75 ? 'high' : value >= 45 ? 'mid' : 'low';
-  const dt = document.createElement('dt');
-  dt.textContent = label;
-  const dd = document.createElement('dd');
+  const [, dd] = rowFor(fields, rows, label);
   dd.className = 'meter-cell';
   dd.dataset.level = level;
-  const track = document.createElement('div');
-  track.className = 'meter-track';
+  let track = dd.querySelector('.meter-track');
+  let amount = dd.querySelector('.meter-amount');
+  if (!track || !amount) {
+    track = document.createElement('div');
+    track.className = 'meter-track';
+    amount = document.createElement('span');
+    amount.className = 'meter-amount';
+    dd.replaceChildren(track, amount);
+  }
   track.setAttribute('role', 'meter');
   track.setAttribute('aria-label', label);
   track.setAttribute('aria-valuemin', '0');
   track.setAttribute('aria-valuemax', '100');
   track.setAttribute('aria-valuenow', String(Math.round(value)));
-  const fill = document.createElement('span');
-  fill.className = 'meter-fill';
+  let fill = track.querySelector('.meter-fill');
+  if (!fill) {
+    fill = document.createElement('span');
+    fill.className = 'meter-fill';
+    track.append(fill);
+  }
   fill.style.width = `${Math.max(0, Math.min(100, value))}%`;
-  track.append(fill);
-  const amount = document.createElement('span');
-  amount.className = 'meter-amount';
   amount.textContent = value.toFixed(1);
-  dd.append(track, amount);
-  fields.append(dt, dd);
 }
 
 export function renderInspector(root, scene, item, detail = null, options = {}) {
@@ -54,25 +81,24 @@ export function renderInspector(root, scene, item, detail = null, options = {}) 
   paintAsciiPreview(root.querySelector('#inspector-symbol'), item);
   root.querySelector('[data-title]').textContent = `${item.kind}${item.layer === 'terrain' ? '' : ` #${item.id}`}`;
   const fields = root.querySelector('[data-fields]');
-  fields.replaceChildren();
-  addField(fields, 'camada', layerLabel(item.layer));
-  addField(fields, 'posição', `${item.x}, ${item.y}`);
+  const rows = rowsFor(fields);
+  addField(fields, rows, 'camada', layerLabel(item.layer));
+  addField(fields, rows, 'posição', `${item.x}, ${item.y}`);
   if (item.layer === 'agent') {
-    addField(fields, 'orientação', directionLabel(item.orientation));
-    addField(fields, 'última ação', actionLabel(item.action));
-    addMeter(fields, 'fome', item.body.hunger);
-    addMeter(fields, 'sede', item.body.thirst);
-    addField(fields, 'geração', item.generation);
-    addField(fields, 'carga', item.carrying ? `${item.carrying.kind} #${item.carrying.id}` : 'nenhuma');
+    addField(fields, rows, 'orientação', directionLabel(item.orientation));
+    addField(fields, rows, 'última ação', actionLabel(item.action));
+    addMeter(fields, rows, 'fome', item.body.hunger);
+    addMeter(fields, rows, 'sede', item.body.thirst);
+    addField(fields, rows, 'geração', item.generation);
+    addField(fields, rows, 'carga', item.carrying ? `${item.carrying.kind} #${item.carrying.id}` : 'nenhuma');
   } else if (item.layer === 'object') {
-    addField(fields, 'quantidade', item.quantity);
-    if (detail) {
-      addField(fields, 'portátil', detail.portable ? 'sim' : 'não');
-      addField(fields, 'ingerível', detail.ingestible ? 'sim' : 'não');
-    }
+    addField(fields, rows, 'quantidade', item.quantity);
+    addField(fields, rows, 'portátil', item.portable ? 'sim' : 'não');
+    addField(fields, rows, 'ingerível', item.ingestible ? 'sim' : 'não');
   } else {
-    addField(fields, 'bloqueio', item.blocking ? 'sim' : 'não');
+    addField(fields, rows, 'bloqueio', item.blocking ? 'sim' : 'não');
     const occupants = cellRecords(scene, item.x, item.y).filter((i) => i.layer !== 'terrain');
-    addField(fields, 'presentes', occupants.map((i) => `${i.kind} #${i.id}`).join(', ') || 'nenhum');
+    addField(fields, rows, 'presentes', occupants.map((i) => `${i.kind} #${i.id}`).join(', ') || 'nenhum');
   }
+  for (const [dt, dd] of rows.values()) { dt.remove(); dd?.remove(); }
 }

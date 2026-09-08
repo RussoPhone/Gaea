@@ -159,6 +159,11 @@ try {
   const target=stack[stack.length-1];
   await page.locator(`#selection-candidates [data-layer="object"][data-id="${target.id}"]`).click();
   assert.equal(await title(),`${target.kind} #${target.id}`);
+  await page.locator(`#selection-candidates [data-layer="object"][data-id="${target.id}"]`).evaluate(el=>el.dataset.pollIdentity='stable');
+  await page.locator('#inspector-summary [data-fields] dd').first().evaluate(el=>el.dataset.pollIdentity='stable');
+  await page.waitForTimeout(450);
+  assert.equal(await page.locator(`#selection-candidates [data-layer="object"][data-id="${target.id}"]`).getAttribute('data-poll-identity'),'stable');
+  assert.equal(await page.locator('#inspector-summary [data-fields] dd').first().getAttribute('data-poll-identity'),'stable');
   assert.match(await page.locator('#inspector').innerText(),/quantidade/);
   await page.locator('#selection-candidates [data-layer="terrain"]').click();
   for(const object of stack)assert.ok((await page.locator('#inspector').innerText()).includes(`#${object.id}`));
