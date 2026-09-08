@@ -295,11 +295,19 @@ class PopulationSimulation:
         agent = self.agents.get(token)
         return (agent.x, agent.y) if agent is not None else None
 
+    def _target_directly_ahead(self, a, layer, token):
+        dx, dy = a.orientation
+        target_cell = (a.micro_x + 2 * dx, a.micro_y + 2 * dy)
+        try:
+            return target_cell in self.physical.cells_for(layer, token)
+        except KeyError:
+            return False
+
     def _apply(self, a, action):
         """Execute exactly one attempt. Return only motor/visible success."""
         obj = self.objects.get(action.target)
         reachable = obj is not None and (obj.carrier == a.uid or
-            (obj.carrier is None and abs(obj.x-a.x)+abs(obj.y-a.y) <= 1))
+            (obj.carrier is None and self._target_directly_ahead(a, 'object', obj.uid)))
         a.motion = (0, 0)
         if action.verb == 'move':
             if abs(action.dx)+abs(action.dy) != 1:
@@ -324,7 +332,7 @@ class PopulationSimulation:
             return True
         if action.verb == 'touch':
             other = self.agents.get(action.target)
-            return bool(reachable or (other and abs(other.x-a.x)+abs(other.y-a.y) <= 1))
+            return bool(reachable or (other and self._target_directly_ahead(a, 'agent', other.uid)))
         if action.verb == 'ingest' and reachable and obj.ingestible:
             a.body.hunger = max(0., min(100., a.body.hunger+obj.effect[0]))
             a.body.thirst = max(0., min(100., a.body.thirst+obj.effect[1]))
@@ -350,7 +358,8 @@ class PopulationSimulation:
             return True
         if action.verb == 'give' and a.carried is not None:
             other = self.agents.get(action.target)
-            if other and other.uid != a.uid and other.carried is None and abs(other.x-a.x)+abs(other.y-a.y) <= 1:
+            if (other and other.uid != a.uid and other.carried is None
+                    and self._target_directly_ahead(a, 'agent', other.uid)):
                 obj = self.objects[a.carried]
                 self._detach(obj)
                 obj.carrier, other.carried = other.uid, obj.uid

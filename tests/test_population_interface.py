@@ -189,9 +189,10 @@ def test_snapshot_localiza_evento_sem_expor_efeito_fisico():
         )
     )
     agent = next(iter(simulation.agents.values()))
+    assert simulation._set_agent_position(agent, 5, 7, (1, 0))
     target = simulation.add_object(
-        agent.x,
-        agent.y,
+        2,
+        2,
         (7, 8, 9),
         effect=(-20, 0),
     )
@@ -200,7 +201,7 @@ def test_snapshot_localiza_evento_sem_expor_efeito_fisico():
 
     event = simulation.snapshot()["events"][-1]
     assert event["position"] == (agent.x, agent.y)
-    assert event["target_position"] == (agent.x, agent.y)
+    assert event["target_position"] == (2, 2)
     assert "effect" not in event
 
 

@@ -7,9 +7,9 @@ from core.simulation.population import PopulationSimulation, PopulationConfig, A
 def arena(seed=1, observation=True):
     s = PopulationSimulation(PopulationConfig(seed=seed, width=7, height=7, population=0,
         objects=0, stones=0, metabolism=0, reproduction=False, observe=observation))
-    a = s.spawn(3, 3)
-    a.orientation = (1, 0)
-    x = s.add_object(3, 3, (91, 3, 7), (-30., 0.), quantity=1000)
+    a = s.spawn(3, 3, micro_position=(11, 10))
+    assert s._set_agent_position(a, 11, 10, (1, 0))
+    x = s.add_object(4, 3, (91, 3, 7), (-30., 0.), quantity=1000)
     y = s.add_object(4, 3, (82, 8, 2), (0., 0.), quantity=1000)
     return s, a, x, y
 
@@ -43,7 +43,8 @@ def trial_latency(seed, observation):
     s, a, x, y = arena(seed, observation)
     # Y is beneficial in this scenario; X is not. Same cognitive code.
     x.effect, y.effect = (0., 0.), (-30., 0.)
-    demonstrator = s.spawn(4, 4)
+    demonstrator = s.spawn(4, 4, micro_position=(13, 12))
+    assert s._set_agent_position(demonstrator, 13, 12, (0, -1))
     for _ in range(5):
         demonstrator.body.hunger = 70.
         s.step({a.uid: Action('wait'), demonstrator.uid: Action('ingest', y.uid)})
