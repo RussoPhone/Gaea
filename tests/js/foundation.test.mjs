@@ -8,8 +8,9 @@ import { cellRecords } from '../../core/interface/static/scene-model.mjs';
 
 const terrain = {id:'0,0',layer:'terrain',kind:'grass',x:0,y:0,blocking:false};
 const object = {id:2,layer:'object',kind:'stone',x:0,y:0,quantity:1};
-const agent = {id:1,layer:'agent',kind:'gaiano',x:0,y:0,orientation:[0,-1],body:{hunger:0,thirst:0}};
-const bootstrap = () => ({schemaVersion:1,worldRevision:'one',tick:0,width:2,height:2,
+const agent = {id:1,layer:'agent',kind:'gaiano',x:0,y:0,orientation:[0,-1],body:{hunger:0,thirst:0},
+  micro_position:[1,1],collision_cells:[[1,1],[1,0]]};
+const bootstrap = () => ({schemaVersion:2,worldRevision:'one',tick:0,width:2,height:2,
   terrain:[terrain,...[[1,0],[0,1],[1,1]].map(([x,y])=>({...terrain,id:`${x},${y}`,x,y}))],objects:[object,{...object,id:3}],agents:[agent],events:[],
   catalog:[],config:{},control:{running:false,speed:20,remaining:0}});
 
@@ -33,10 +34,25 @@ test('invalid nested data cannot replace a valid scene and schema changes reques
   assert.equal(s.scene,scene);
   assert.throws(()=>s.bootstrap({...bootstrap(),terrain:[terrain]}));
   assert.equal(s.scene,scene);
-  assert.equal(s.applyFrame({...bootstrap(),schemaVersion:2}), 'resync');
-  assert.throws(()=>s.bootstrap({...bootstrap(),schemaVersion:2}));
+  assert.equal(s.applyFrame({...bootstrap(),schemaVersion:3}), 'resync');
+  assert.throws(()=>s.bootstrap({...bootstrap(),schemaVersion:3}));
   assert.equal(s.scene,scene);
   assert.throws(()=>cellRecords(scene,0,0).pop());
+});
+
+test('store rejects malformed or inconsistent agent microcell geometry atomically',()=>{
+  const invalid = [
+    {...agent,micro_position:[1]},
+    {...agent,collision_cells:[[1,1]]},
+    {...agent,collision_cells:[[1,1],[2,2]]},
+    {...agent,micro_position:[0,0],collision_cells:[[0,0],[-1,0]]},
+    {...agent,x:1,micro_position:[1,1],collision_cells:[[1,1],[1,0]]},
+  ];
+  for (const candidate of invalid) {
+    const s=new SimulationStore();s.bootstrap(bootstrap());const scene=s.scene;
+    assert.throws(()=>s.applyFrame({...bootstrap(),tick:1,agents:[candidate]}));
+    assert.equal(s.scene,scene);
+  }
 });
 
 test('selection enumerates all layers without collapsing stacked objects',()=>{
@@ -66,7 +82,7 @@ test('ascii renderer consumes a frozen scene and exposes the picking contract',(
 
 test('ascii renderer culls layers and picks the visible interpolated agent without changing grid state',()=>{
   const s=new SimulationStore();s.bootstrap(bootstrap());
-  s.applyFrame({...bootstrap(),tick:1,agents:[{...agent,x:1}]});
+  s.applyFrame({...bootstrap(),tick:1,agents:[{...agent,x:1,micro_position:[3,1],collision_cells:[[3,1],[3,0]]}]});
   const ctx=new Proxy({}, {get(t,k){return t[k]??(()=>{});},set(t,k,v){t[k]=v;return true;}});
   const r=new AsciiRenderer(),drawn=[];
   r.mount({getContext:()=>ctx});r.resize({width:24,height:24});
