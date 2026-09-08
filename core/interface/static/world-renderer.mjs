@@ -1,6 +1,10 @@
 import { fitCamera, visibleBounds, worldToScreen } from "./camera.mjs";
 import { actionGlyph, appearanceStyle } from "./presentation.mjs";
 
+export function worldItemLabel(item) {
+  return ({ water: "água", food: "comida", stone: "pedra", ground: "chão" })[item?.kind] || "objeto";
+}
+
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -22,11 +26,18 @@ export function buildWorldFrame(snapshot, camera, viewport, selectedId) {
     Math.max(1, Number(snapshot.height) || 1),
   );
   const agents = list(snapshot.agents).filter((item) => within(item, bounds));
+  const terrain = list(snapshot.terrain).filter((item) => within(item, bounds));
+  const objects = list(snapshot.objects).filter((item) => within(item, bounds));
   return {
     bounds,
-    terrain: list(snapshot.terrain).filter((item) => within(item, bounds)),
-    objects: list(snapshot.objects).filter((item) => within(item, bounds)),
+    terrain,
+    objects,
     agents,
+    targets: [
+      ...terrain.map((item) => ({ kind: "tile", label: worldItemLabel(item), x: item.x, y: item.y })),
+      ...objects.map((item) => ({ kind: "object", label: worldItemLabel(item), x: item.x, y: item.y })),
+      ...agents.map((item) => ({ kind: "agent", label: `Gaiano #${item.id}`, x: item.x, y: item.y, id: item.id })),
+    ],
     hits: agents.map((agent) => ({
       id: agent.id,
       ...worldToScreen(camera, agent.x + 0.5, agent.y + 0.5),
@@ -40,13 +51,6 @@ function direction(value) {
   const [rawX = 0, rawY = -1] = list(value);
   const length = Math.hypot(Number(rawX) || 0, Number(rawY) || 0) || 1;
   return { x: (Number(rawX) || 0) / length, y: (Number(rawY) || 0) / length };
-}
-
-function signatureSeed(value) {
-  return list(value).reduce(
-    (seed, part) => (Math.imul(seed ^ Math.round((Number(part) || 0) * 997), 16777619) >>> 0),
-    2166136261,
-  );
 }
 
 function interpolatedAgents(snapshot, previous, progress) {
@@ -67,6 +71,7 @@ export class WorldRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.context = canvas.getContext("2d");
+    this.targets = [];
   }
 
   viewport() {
@@ -106,10 +111,10 @@ export class WorldRenderer {
       viewport,
       frameState.selectedId,
     );
+    this.targets = frame.targets;
     this.#drawWorldBase(snapshot, camera);
     for (const tile of frame.terrain) this.#drawTile(tile, camera);
     for (const object of frame.objects) this.#drawObject(object, camera);
-    this.#drawEffects(list(frameState.effects), camera, frameState.now || performance.now());
     for (const agent of frame.agents) {
       this.#drawAgent(agent, camera, sameId(agent.id, frameState.selectedId));
     }
@@ -121,6 +126,7 @@ export class WorldRenderer {
     ctx.clearRect(0, 0, viewport.width, viewport.height);
     ctx.fillStyle = "#090c09";
     ctx.fillRect(0, 0, viewport.width, viewport.height);
+    this.targets = [];
     if (!selected) return [];
     const perception = list(selected.perception);
     const range = Math.max(1, ...perception.flatMap((item) => [
@@ -154,9 +160,9 @@ export class WorldRenderer {
   #drawWorldBase(snapshot, camera) {
     const ctx = this.context;
     const origin = worldToScreen(camera, 0, 0);
-    ctx.fillStyle = "#151a12";
+    ctx.fillStyle = "#405033";
     ctx.fillRect(origin.x, origin.y, snapshot.width * camera.cell, snapshot.height * camera.cell);
-    ctx.strokeStyle = "rgba(206, 194, 150, .22)";
+    ctx.strokeStyle = "rgba(18, 27, 18, .45)";
     ctx.lineWidth = 1;
     ctx.strokeRect(origin.x, origin.y, snapshot.width * camera.cell, snapshot.height * camera.cell);
   }
@@ -165,11 +171,22 @@ export class WorldRenderer {
     const ctx = this.context;
     const point = worldToScreen(camera, tile.x, tile.y);
     const cell = camera.cell;
-    const style = appearanceStyle(tile.appearance, tile.blocking ? 0.72 : 0.34);
-    ctx.fillStyle = style.color;
+    const kind = tile.kind || (tile.blocking ? "stone" : "ground");
+    const colors = { ground: "#52663e", water: "#317aa1", stone: "#70736b", food: "#52663e" };
+    ctx.fillStyle = colors[kind] || "#52663e";
     ctx.fillRect(point.x, point.y, cell + 0.4, cell + 0.4);
-    if (tile.blocking) {
-      ctx.fillStyle = `hsla(${style.hue}, ${Math.max(12, style.saturation - 12)}%, 26%, .92)`;
+    if (kind === "water") {
+      ctx.strokeStyle = "rgba(191, 226, 238, .54)";
+      ctx.lineWidth = Math.max(1, cell * .045);
+      for (const y of [.3, .62]) {
+        ctx.beginPath();
+        ctx.moveTo(point.x + cell * .16, point.y + cell * y);
+        ctx.lineTo(point.x + cell * .5, point.y + cell * (y - .04));
+        ctx.lineTo(point.x + cell * .84, point.y + cell * y);
+        ctx.stroke();
+      }
+    } else if (kind === "stone") {
+      ctx.fillStyle = "#50554f";
       ctx.beginPath();
       ctx.moveTo(point.x + cell * 0.12, point.y + cell * 0.82);
       ctx.lineTo(point.x + cell * 0.34, point.y + cell * 0.2);
@@ -178,9 +195,6 @@ export class WorldRenderer {
       ctx.lineTo(point.x + cell * 0.92, point.y + cell * 0.84);
       ctx.closePath();
       ctx.fill();
-    } else if (cell >= 18 && (tile.x * 17 + tile.y * 31) % 5 === 0) {
-      ctx.fillStyle = "rgba(224, 211, 160, .12)";
-      ctx.fillRect(point.x + cell * 0.24, point.y + cell * 0.66, 1, Math.max(2, cell * 0.12));
     }
     if (cell >= 28) {
       ctx.strokeStyle = "rgba(220, 210, 174, .055)";
@@ -191,35 +205,33 @@ export class WorldRenderer {
   #drawObject(object, camera) {
     const ctx = this.context;
     const center = worldToScreen(camera, object.x + 0.5, object.y + 0.5);
-    const size = Math.max(3, Math.min(12, camera.cell * 0.22));
-    const style = appearanceStyle(object.appearance);
-    const shape = signatureSeed(object.appearance) % 3;
+    const size = Math.max(4, Math.min(14, camera.cell * 0.24));
     ctx.save();
     ctx.translate(center.x, center.y);
-    ctx.fillStyle = style.color;
-    ctx.strokeStyle = "rgba(248, 235, 188, .72)";
-    ctx.lineWidth = Math.max(1, camera.cell * 0.035);
-    ctx.beginPath();
-    if (shape === 0) {
-      ctx.arc(0, 0, size, 0, Math.PI * 2);
-    } else if (shape === 1) {
-      ctx.moveTo(0, -size * 1.2);
-      ctx.lineTo(size, 0);
-      ctx.lineTo(0, size * 1.2);
-      ctx.lineTo(-size, 0);
-      ctx.closePath();
+    if (object.kind === "food") {
+      ctx.fillStyle = "#284d2d";
+      for (const [x, y] of [[0, -size * .45], [-size * .55, size * .1], [size * .55, size * .12]]) {
+        ctx.beginPath(); ctx.arc(x, y, size * .62, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = "#cf674b";
+      for (const [x, y] of [[0, -size * .45], [-size * .35, size * .25], [size * .4, size * .18]]) {
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1.4, size * .17), 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (object.kind === "water") {
+      ctx.fillStyle = "#3b90b7";
+      ctx.beginPath(); ctx.ellipse(0, 0, size * 1.2, size * .72, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#b9e0ed"; ctx.lineWidth = Math.max(1, size * .12);
+      ctx.beginPath(); ctx.moveTo(-size * .65, 0); ctx.lineTo(size * .65, 0); ctx.stroke();
     } else {
-      ctx.moveTo(0, -size * 1.2);
-      ctx.lineTo(size, size);
-      ctx.lineTo(0, size * 0.45);
-      ctx.lineTo(-size, size);
-      ctx.closePath();
+      ctx.fillStyle = "#8a897e";
+      ctx.beginPath();
+      ctx.moveTo(0, -size); ctx.lineTo(size, -size * .2); ctx.lineTo(size * .58, size);
+      ctx.lineTo(-size * .72, size * .75); ctx.lineTo(-size, -size * .25); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#bdbaaa"; ctx.lineWidth = Math.max(1, size * .11); ctx.stroke();
     }
-    ctx.fill();
-    ctx.stroke();
     ctx.restore();
     if (camera.cell >= 28 && Number(object.quantity) > 1) {
-      ctx.fillStyle = "#e9dfb7";
+      ctx.fillStyle = "#f5ead0";
       ctx.font = `600 ${Math.max(9, camera.cell * 0.24)}px ui-monospace, monospace`;
       ctx.fillText(String(object.quantity), center.x + size, center.y - size);
     }
@@ -230,36 +242,26 @@ export class WorldRenderer {
     const center = worldToScreen(camera, agent.x + 0.5, agent.y + 0.5);
     const radius = Math.max(4.5, Math.min(14, camera.cell * 0.3));
     const facing = direction(agent.orientation);
-    const identity = appearanceStyle([agent.id, agent.generation || 0]);
     ctx.save();
     ctx.translate(center.x, center.y);
     ctx.rotate(Math.atan2(facing.y, facing.x) + Math.PI / 2);
-    ctx.fillStyle = agent.alive === false ? "#706b5e" : "#d8d09f";
-    ctx.strokeStyle = selected ? "#fff2a6" : identity.color;
-    ctx.lineWidth = selected ? 2.8 : 1.6;
+    ctx.fillStyle = agent.alive === false ? "#706b5e" : "#e9d8ae";
+    ctx.strokeStyle = selected ? "#fff2a6" : "#263225";
+    ctx.lineWidth = selected ? 2.4 : 1.2;
     ctx.beginPath();
-    ctx.moveTo(0, -radius * 1.2);
-    ctx.quadraticCurveTo(radius, -radius * 0.15, radius * 0.7, radius);
-    ctx.lineTo(0, radius * 0.58);
-    ctx.lineTo(-radius * 0.7, radius);
-    ctx.quadraticCurveTo(-radius, -radius * 0.15, 0, -radius * 1.2);
+    ctx.ellipse(0, radius * .26, radius * .65, radius * .9, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = "#e9d8ae";
     ctx.beginPath();
-    ctx.arc(0, -radius * 0.52, radius * 0.2, 0, Math.PI * 2);
-    ctx.fillStyle = "#24271c";
+    ctx.arc(0, -radius * .68, radius * .43, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
 
     if (agent.carrying) {
       ctx.fillStyle = appearanceStyle(agent.carrying.appearance || agent.carrying).color;
       ctx.fillRect(center.x + radius * 0.55, center.y + radius * 0.5, radius * 0.65, radius * 0.65);
-    }
-    if (camera.cell >= 28) {
-      ctx.fillStyle = "rgba(248, 241, 205, .92)";
-      ctx.font = `600 ${Math.max(9, camera.cell * 0.22)}px ui-monospace, monospace`;
-      ctx.textAlign = "center";
-      ctx.fillText(`#${agent.id} ${actionGlyph(agent.action)}`, center.x, center.y - radius - 6);
     }
   }
 
@@ -279,43 +281,4 @@ export class WorldRenderer {
     }
   }
 
-  #drawEffects(effects, camera, now) {
-    const ctx = this.context;
-    for (const effect of effects) {
-      const age = Math.max(0, now - Number(effect.createdAt || now));
-      const opacity = Math.max(0, 1 - age / 1300);
-      if (!opacity) continue;
-      const at = effect.at || effect.to;
-      if (!at) continue;
-      const center = worldToScreen(camera, at[0] + 0.5, at[1] + 0.5);
-      ctx.save();
-      ctx.globalAlpha = opacity;
-      ctx.strokeStyle = effect.kind === "death" ? "#c16f62" : "#e6ce83";
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.lineWidth = 2;
-      if (effect.kind === "move" && effect.from) {
-        const from = worldToScreen(camera, effect.from[0] + 0.5, effect.from[1] + 0.5);
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(center.x, center.y);
-        ctx.stroke();
-      } else if (effect.kind === "signal") {
-        ctx.beginPath();
-        ctx.arc(center.x, center.y, camera.cell * (0.4 + age / 500), 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        ctx.font = `700 ${Math.max(12, camera.cell * 0.5)}px ui-monospace, monospace`;
-        ctx.textAlign = "center";
-        ctx.fillText(actionGlyph(effect.kind), center.x, center.y - camera.cell * 0.28);
-        if (effect.target) {
-          const target = worldToScreen(camera, effect.target[0] + 0.5, effect.target[1] + 0.5);
-          ctx.beginPath();
-          ctx.moveTo(center.x, center.y);
-          ctx.lineTo(target.x, target.y);
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
-    }
-  }
 }

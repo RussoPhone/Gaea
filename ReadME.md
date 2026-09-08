@@ -2,6 +2,8 @@
 
 Laboratório populacional para investigar comportamentos aprendidos e persistentes a partir de condições físicas. Não há scripts de civilização, aldeias, profissões, alianças ou linguagem. Este recorte oferece um substrato experimental; ainda não há evidência de civilização inteligente.
 
+**Runtime atual:** `PopulationSimulation` via `python -m core.main`. O antigo motor `Simulation`/`ScenarioConfig` vive em `legacy/` e não é usado pela CLI principal.
+
 ## Executar
 
 Python 3.11 ou posterior. O simulador e a interface usam somente a biblioteca padrão. Para os testes, instalar `pytest` no seu ambiente Python.
@@ -12,9 +14,9 @@ Na raiz do projeto:
 python -m core.main ui
 ```
 
-Abra **http://127.0.0.1:8765**. A execução começa pausada. O mundo top-down ocupa a janela: arraste para mover a câmera, use a roda para aproximar e clique num gaiano para ver ação, fome, sede, orientação e carga. A ficha permite acompanhar o indivíduo, trocar para o campo sensorial que ele percebe e abrir seu grafo de relações e experiências. Eventos recentes aparecem sobre o mapa. Os controles inferiores permitem continuar, pausar, avançar um tick, mudar velocidade e disparar uma rajada. O worker avança independentemente do polling da interface.
+Abra **http://127.0.0.1:8765**. A execução começa pausada. O mundo top-down ocupa a janela em ASCII ligado ao estado físico: arraste para mover a câmera, use a roda para aproximar e clique em agentes, objetos ou terreno. Um inspector não modal mostra informações básicas e permite escolher entre todos os elementos da célula, inclusive vários objetos. Os controles inferiores permitem continuar, pausar, avançar um tick, mudar velocidade e disparar uma rajada. O worker avança independentemente do polling da interface.
 
-Atalhos: `Espaço` continua ou pausa; `.` avança um tick; `F` acompanha a seleção; `0` enquadra o mundo; setas movem a câmera; `Esc` fecha a inspeção ou retorna à visão global.
+Atalhos: `Espaço` continua ou pausa; `.` avança um tick; `F` acompanha o agente selecionado; `0` enquadra o mundo; setas movem a câmera; `Esc` fecha a inspeção.
 
 Para um mundo menor:
 
@@ -22,7 +24,9 @@ Para um mundo menor:
 python -m core.main ui --population 10 --width 18 --height 14 --objects 90 --stones 5
 ```
 
-O mapa global é a visão do pesquisador. O modo sensorial mostra apenas observações locais do gaiano selecionado. Consultar ou selecionar um agente não modifica experiência, memória, decisões ou aleatoriedade.
+O mapa global é a visão do pesquisador, não a perspectiva sensorial do gaiano. Consultar ou selecionar um agente não modifica experiência, memória, decisões ou aleatoriedade. A interface expõe registros e memória já armazenados, mas não fornece ao pesquisador uma visão sensorial simulada nem envia ordens ao gaiano. Contrato, testes e limites estão em [Fundação tiles](docs/interface/tiles-foundation.md).
+
+O inspector do gaiano possui abas **Corpo**, **Memória** e **Registro**. Memória apresenta relações e suas evidências; Registro separa experiências próprias/observadas dos eventos físicos envolvendo o indivíduo. Essas leituras são consultadas ao abrir a aba e ficam fixadas no tick indicado: use **atualizar** para obter outra leitura sem pausar a simulação. Assinaturas não são convertidas em nomes de recursos. A [linguagem visual e os limites da inspeção](docs/interface/visual-language.md) estão documentados separadamente.
 
 ## Headless, seeds e resultados
 
@@ -54,7 +58,7 @@ A fronteira cognitiva está em `core/cognition/records.py`. `View`, `Observation
 - Espaço: deslocamentos relativos, orientação corporal e posição relativa adquirida por movimento. Não há mapa global na decisão.
 - Outros: deslocamento, última ação externamente visível e sinal arbitrário, dentro do alcance e oclusão. Nenhuma necessidade, intenção ou memória alheia.
 
-A visão é um semiplano frontal com distância Manhattan e oclusão por terreno bloqueante; há contato omnidirecional a distância 1. A iluminação do runtime populacional é constante nesta versão. O ciclo de céu do toy histórico continua disponível, mas não condiciona este experimento.
+A visão é um semiplano frontal com distância Manhattan e oclusão por terreno bloqueante; há contato omnidirecional a distância 1. A iluminação do runtime populacional é constante nesta versão. O ciclo de céu do runtime legado (`legacy/`) continua disponível nos toys históricos, mas não condiciona este experimento.
 
 `Tile.tile_type` e `PhysicalObject.effect` pertencem à verdade física interna. A percepção, inclusive no toy histórico, não transmite `food`, `water`, `stone` ou identificadores funcionais equivalentes. Trocar os efeitos associados às aparências não exige alteração do código cognitivo.
 
@@ -64,15 +68,17 @@ Cada gaiano nasce com memória vazia. Uma relação contextual reúne assinatura
 
 Os efeitos são atualizados por média exponencial. Resultados contraditórios elevam o erro e reduzem confiança; relações decaem e são removidas/substituídas quando necessário. Por padrão há no máximo 192 relações e 128 experiências recentes por agente. Não existem nós FOOD, SAFE, HOME ou conceitos equivalentes. Ainda não há formação explícita de clusters por similaridade: assinaturas iguais permitem generalização, assinaturas diferentes são aprendidas separadamente.
 
-A decisão compara efeitos corporais previstos, ponderados pelos déficits atuais, com exploração estocástica. A aproximação de um padrão visível pode receber valor das interações previamente experimentadas com esse padrão. Isso usa apenas distâncias relativas da percepção atual; não usa pathfinding global. O painel de decisão mostra exploração, valor estimado, alternativas e IDs das relações usadas. As evidências ajudam a explicar uma escolha; não constituem uma prova causal de comportamento coletivo.
+A decisão compara efeitos corporais previstos, ponderados pelos déficits atuais, com exploração estocástica. A aproximação de um padrão visível pode receber valor das interações previamente experimentadas com esse padrão. Isso usa apenas distâncias relativas da percepção atual; não usa pathfinding global. Os registros de decisão incluem exploração, valor estimado, alternativas e IDs das relações usadas; sua interface aprofundada fica para a próxima rodada. As evidências ajudam a explicar uma escolha; não constituem uma prova causal de comportamento coletivo.
 
 Observar uma ação externamente visível produz experiência de menor confiança e sem delta corporal alheio. O alvo dirigido só é registrado quando a projeção sensorial contém esse alvo; caso ele suma ou não esteja visível, a memória não inventa assinatura oculta. Essa exposição favorece **experimentar** a ação observada. Só a experiência própria estabelece seu efeito fisiológico. Sinais locais podem entrar como contexto nas relações; seus quatro valores não possuem significado atribuído pelo mundo. Não há protocolo de comunicação programado.
 
 ## Física e continuidade
 
-Terreno, objetos manipuláveis e organismos são camadas separadas. A ocupação e os objetos usam índices por célula. O repertório motor inclui mover, girar, esperar, inspecionar, tocar, ingerir, pegar, soltar, colocar à frente, transferir e emitir sinais. Carregar é um estado persistente após pegar; aproximar-se é uma sequência de movimentos. Cada tentativa consome um tick, incluindo falhas. A ingestão exige ação explícita.
+Terreno, objetos manipuláveis e organismos são camadas separadas. A posição pública continua em células do mundo, mas a verdade física fina vive em microcélulas discretas dentro delas. Agentes e objetos possuem `shape` real nessa malha; tiles funcionam como agregação, índice e compatibilidade visual, não como a forma completa dos corpos. O repertório motor inclui mover, girar, esperar, inspecionar, tocar, ingerir, pegar, soltar, colocar à frente, transferir e emitir sinais. Carregar é um estado persistente após pegar; aproximar-se é uma sequência de movimentos. Cada tentativa consome um tick, incluindo falhas. A ingestão exige ação explícita.
 
-Objetos possuem aparência e propriedades internas independentes: efeito corporal, portabilidade, possibilidade de ingestão e quantidade. Podem mudar de lugar e permanecer disponíveis a outros indivíduos. O cenário padrão possui dois tipos de locais produtores e objetos inertes finitos; mover um objeto inerte não cria uma cópia. Produção por intervalo e limite de estoque restringem o aporte externo.
+Objetos possuem aparência, shape e propriedades internas independentes: efeito corporal, portabilidade, possibilidade de ingestão, quantidade e bloqueio físico quando aplicável. Podem mudar de lugar e permanecer disponíveis a outros indivíduos. Tentativas de pegar, soltar, colocar ou transferir registram sucesso/falha, alvo material, mudança visível e contexto sensorial local para aprendizado. O cenário padrão possui dois tipos de locais produtores e objetos inertes finitos; mover um objeto inerte não cria uma cópia. Produção por intervalo e limite de estoque restringem o aporte externo.
+
+A percepção deriva da malha física: o gaiano recebe fragmentos relativos de shape apenas quando há linha de visão, incluindo casos de oclusão parcial. Efeitos internos e nomes funcionais continuam fora da fronteira cognitiva. A UI do navegador usa esses mesmos shapes: longe comprime gaianos para `@`, em escala média usa um glifo corporal simples e de perto revela microcélulas reais com nariz triangular orientado. O renderer pode comprimir ou revelar; não cria anatomia, paredes ou construções scriptadas.
 
 A reprodução opcional é assexuada e fisiológica: exige maturidade, intervalo, baixos déficits e espaço adjacente, custa reservas corporais e cria descendente sem memória. Não há intenção reprodutiva ou recompensa cognitiva por nascimento. `--population-limit` impõe um teto computacional de nascimentos; não provoca reposição de mortos. Mortes liberam ocupação e deixam a carga no mundo.
 
@@ -80,6 +86,7 @@ A reprodução opcional é assexuada e fisiológica: exige maturidade, intervalo
 
 ```sh
 python -m pytest -q
+node --test tests/js/*.test.mjs
 ```
 
 Os testes incluem exploração inicial sem preferência funcional, mudança após ingestões reais, inversão dos efeitos com reaprendizagem, menor número de tentativas até a descoberta após exposição social, sinais contextuais, independência de memória, oclusão, falhas motoras, transporte, custos de nascimento, limite de memória/estoque, RNGs intercalados, snapshots sem efeitos e retomada exata.
@@ -94,11 +101,16 @@ Limitações atuais: memória de assinaturas discretas, previsão de curto horiz
 
 ## Organização do código
 
-- `core/ambient`: verdade física e índice espacial.
+O runtime atual do Gaea é `PopulationSimulation` (`core/simulation/population.py`), exposto por `python -m core.main`.
+
+- `core/ambient`: terreno, objetos físicos e malha fina de ocupação.
+- `core/being`: organismo/corpo usados pelo runtime populacional.
 - `core/cognition`: registros, memória relacional e decisão sem acesso ao mundo.
 - `core/simulation/population.py`: ciclo populacional, fronteira sensorial e execução física.
 - `core/simulation/experiments.py`: métricas, JSONL, checkpoints e benchmark.
-- `core/interface`: servidor local e observador canvas.
-- `toys/toy001_survival_instinct`: controle histórico de movimentos aleatórios, executável com `python -m toys.toy001_survival_instinct.run`. Não implementa o novo ciclo cognitivo.
+- `core/representation`: projeção pública read-only, bootstrap e frames dinâmicos.
+- `core/interface`: controlador HTTP e cliente observador ASCII.
+- `legacy/`: runtime histórico baseado em `Simulation`, `ScenarioConfig`, `Sensor`/`Perception`, sistemas de affordance/ambiente, céu/microticks e runner interativo. Não é o Gaea atual; permanece para toys e testes históricos.
+- `toys/toy001_survival_instinct`: controle histórico de movimentos aleatórios sobre o runtime legado (`python -m toys.toy001_survival_instinct.run`).
 
 As regras originais permanecem em `rules.md` e `docs/rules.md`.

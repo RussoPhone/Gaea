@@ -9,6 +9,7 @@ import {
 import {
   deriveWorldEffects,
   reconcileSelection,
+  updateConnection,
 } from "../../core/interface/static/presentation.mjs";
 import {
   buildMemoryGraph,
@@ -16,6 +17,7 @@ import {
 } from "../../core/interface/static/memory-graph.mjs";
 import {
   buildWorldFrame,
+  worldItemLabel,
 } from "../../core/interface/static/world-renderer.mjs";
 
 test("fitCamera keeps the complete world inside the viewport", () => {
@@ -60,6 +62,19 @@ test("a vanished selection retains its last observation for one update", () => {
     }),
     { id: 3, detail: selected, dead: true, following: false },
   );
+});
+
+test("connection status updates without a legacy connection wrapper", () => {
+  const label = { textContent: "" };
+  const root = {
+    getElementById(id) {
+      return id === "connection-label" ? label : null;
+    },
+  };
+
+  updateConnection(root, true, "observando");
+
+  assert.equal(label.textContent, "observando");
 });
 
 test("memory graph joins relations to their evidence without semantic labels", () => {
@@ -131,6 +146,18 @@ test("world frame culls records and keeps screen-space hits", () => {
     radius: 9,
     selected: true,
   });
+  assert.deepEqual(frame.targets.find((target) => target.kind === "object"), {
+    kind: "object",
+    label: "objeto",
+    x: 12,
+    y: 12,
+  });
+});
+
+test("world labels name physical kinds instead of appearance signatures", () => {
+  assert.equal(worldItemLabel({ kind: "water" }), "água");
+  assert.equal(worldItemLabel({ kind: "food" }), "comida");
+  assert.equal(worldItemLabel({ kind: "stone" }), "pedra");
 });
 
 test("memory layout is deterministic and keeps nodes inside its viewport", () => {

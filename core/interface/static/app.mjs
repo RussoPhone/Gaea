@@ -1,548 +1,228 @@
-import {
-  centerCameraOn,
-  fitCamera,
-  panCamera,
-  zoomCameraAt,
-} from "./camera.mjs";
-import { deriveWorldEffects, reconcileSelection } from "./presentation.mjs";
-import { buildMemoryGraph, MemoryGraphRenderer } from "./memory-graph.mjs";
-import { WorldRenderer } from "./world-renderer.mjs";
+import { ObserverTransport } from './transport.mjs';
+import { SimulationStore } from './store.mjs';
+import { fitCamera,panCamera,zoomCameraAt,centerCameraOn } from './camera.mjs';
+import { candidatesAt,resolveSelection,selectionKey } from './selection.mjs';
+import { assertRenderer } from './renderers/renderer-contract.mjs';
+import { AsciiRenderer,paintAsciiPreview } from './renderers/ascii-renderer.mjs';
+import { renderInspector } from './ui/inspector.mjs';
+import { renderAgentHistory } from './ui/agent-history.mjs';
+import { layerLabel } from './ui/inspection-format.mjs';
 
-const $ = (id) => document.getElementById(id);
-const canvas = $("world-canvas");
-const renderer = new WorldRenderer(canvas);
-const agentDialog = $("agent-dialog");
-const memoryDialog = $("memory-dialog");
-const memoryCanvas = $("memory-canvas");
-const memoryRenderer = new MemoryGraphRenderer(memoryCanvas);
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const $=id=>document.getElementById(id),canvas=$('world-canvas');
+const transport=new ObserverTransport(),store=new SimulationStore();
+const ui={camera:null,selection:null,cell:null,detail:null,following:false,
+  tab:'summary',reading:null,readingLoading:false,readingError:''};
+let readingRequest=0;
+let renderer,snapshotAt=0,dirty=true,pollQueued=false,controlBusy=false;
+let tail=Promise.resolve(),timer=null;
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const viewport=()=>({width:canvas.clientWidth,height:canvas.clientHeight,ratio:Math.min(devicePixelRatio||1,2)});
+const enqueue=task=>{const result=tail.then(task,task);tail=result.catch(()=>{});return result;};
 
-const state = {
-  snapshot: null,
-  previousSnapshot: null,
-  snapshotAt: performance.now(),
-  camera: null,
-  selectedId: null,
-  selection: null,
-  perspective: "global",
-  following: false,
-  effects: [],
-  hits: [],
-  requestTail: Promise.resolve(),
-  pollQueued: false,
-  controlBusy: false,
-  online: false,
-  memoryGraph: null,
-  memoryHits: [],
-  selectedMemoryId: null,
-};
-
-const actionNames = {
-  move: "movendo",
-  turn: "girando",
-  wait: "esperando",
-  inspect: "observando",
-  ingest: "ingerindo",
-  pick: "recolhendo",
-  drop: "soltando",
-  place: "posicionando",
-  give: "transferindo",
-  touch: "tocando",
-  signal: "sinalizando",
-  birth: "nascimento",
-  death: "morte",
-};
-
-function list(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function sameId(left, right) {
-  return String(left) === String(right);
-}
-
-function setText(id, value, fallback = "—") {
-  $(id).textContent = value === null || value === undefined || value === "" ? fallback : String(value);
-}
-
-function bounded(value) {
-  return Math.max(0, Math.min(100, Number(value) || 0));
-}
-
-function formatPosition(value) {
-  return Array.isArray(value) ? `${value[0]}, ${value[1]}` : "—";
-}
-
-function formatAppearance(value) {
-  const appearance = Array.isArray(value) ? value : value?.appearance;
-  return Array.isArray(appearance) ? `aparência ${appearance.join("·")}` : "sem carga";
-}
-
-function formatOrientation(value) {
-  const [x, y] = list(value).map((part) => Math.sign(Number(part) || 0));
-  return ({
-    "0,-1": "↑ norte",
-    "1,0": "→ leste",
-    "0,1": "↓ sul",
-    "-1,0": "← oeste",
-  })[`${x},${y}`] || "—";
-}
-
-function enqueue(task) {
-  const result = state.requestTail.then(task, task);
-  state.requestTail = result.catch(() => {});
-  return result;
-}
-
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: { Accept: "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-  let payload;
-  try {
-    payload = await response.json();
-  } catch (_) {
-    throw new Error(`resposta inválida (${response.status})`);
-  }
-  if (!response.ok) throw new Error(payload.error || `erro HTTP ${response.status}`);
-  return payload;
-}
-
-function setConnection(online, detail) {
-  state.online = online;
-  const connection = document.querySelector(".connection");
-  connection.classList.toggle("online", online);
-  setText("connection-label", detail);
-}
-
-function showError(message) {
-  const banner = $("error-banner");
-  banner.textContent = message || "";
-  banner.hidden = !message;
-}
-
-function currentAgent() {
-  return list(state.snapshot?.agents).find((agent) => sameId(agent.id, state.selectedId));
-}
-
-function fitWorld() {
-  if (!state.snapshot) return;
-  const viewport = renderer.viewport();
-  state.camera = fitCamera(
-    state.snapshot.width,
-    state.snapshot.height,
-    viewport.width,
-    viewport.height,
-    viewport.width < 620 ? 18 : 38,
-  );
-}
-
-function centerOnSelected(immediate = false) {
-  const agent = currentAgent();
-  if (!agent || !state.camera) return;
-  const desired = centerCameraOn(state.camera, agent.x, agent.y, renderer.viewport());
-  if (immediate || reducedMotion.matches) {
-    state.camera = desired;
-    return;
-  }
-  state.camera = {
-    ...state.camera,
-    offsetX: state.camera.offsetX + (desired.offsetX - state.camera.offsetX) * 0.12,
-    offsetY: state.camera.offsetY + (desired.offsetY - state.camera.offsetY) * 0.12,
-  };
-}
-
-function setFollowing(enabled) {
-  state.following = Boolean(enabled && state.selectedId !== null && currentAgent());
-  if (state.following) {
-    state.perspective = "global";
-    centerOnSelected(true);
-  }
-  renderChrome();
-}
-
-function setPerspective(perspective) {
-  if (perspective === "agent" && !state.selection?.detail) return;
-  state.perspective = perspective;
-  if (perspective === "agent") state.following = false;
-  renderChrome();
-}
-
-function renderStatus() {
-  const snapshot = record(state.snapshot);
-  const metrics = record(snapshot.metrics);
-  const control = record(snapshot.control);
-  const remaining = Math.max(0, Math.trunc(Number(control.remaining) || 0));
-  const runLabel = control.running ? "EM CURSO" : remaining ? "RAJADA" : "PAUSADA";
-  setText("tick-value", Math.trunc(Number(snapshot.tick) || 0));
-  setText("alive-value", metrics.alive);
-  setText("generation-value", metrics.generation);
-  setText("births-value", metrics.births, "0");
-  setText("deaths-value", metrics.deaths, "0");
-  setText("run-state", runLabel);
-  setText("remaining-value", remaining ? `${remaining} passos restantes` : control.running ? `${control.speed || 0} ticks/s` : "tempo suspenso");
-  $("run-button").classList.toggle("active", Boolean(control.running));
-  $("pause-button").classList.toggle("active", !control.running && !remaining);
-  if (control.speed && document.activeElement !== $("speed-select")) {
-    $("speed-select").value = String(control.speed);
+function error(message=''){$('error-banner').textContent=message;$('error-banner').hidden=!message;}
+function fit(){if(store.scene){const v=viewport();ui.camera=fitCamera(store.scene.width,store.scene.height,v.width,v.height,16);dirty=true;}}
+function paintKey(){
+  for(const symbol of document.querySelectorAll('[data-symbol]')){
+    const [layer,kind]=symbol.dataset.symbol.split(':');paintAsciiPreview(symbol,{layer,kind});
   }
 }
-
-function eventDescription(event) {
-  const action = actionNames[event.action] || event.action || "acontecimento";
-  const target = event.child ?? event.target;
-  const where = Array.isArray(event.position) ? ` em ${formatPosition(event.position)}` : "";
-  return `#${event.actor} ${action}${target === null || target === undefined ? "" : ` → #${target}`}${where}`;
-}
-
-function renderEvents() {
-  const events = list(state.snapshot?.events).slice(-10).reverse();
-  setText("event-count", events.length, "0");
-  const container = $("event-list");
-  container.replaceChildren();
-  if (!events.length) {
-    const item = document.createElement("li");
-    item.className = "empty-event";
-    item.textContent = "O mundo ainda está quieto.";
-    container.append(item);
-    return;
-  }
-  for (const event of events) {
-    const item = document.createElement("li");
-    const tick = document.createElement("time");
-    const description = document.createElement("span");
-    tick.textContent = `t${event.tick}`;
-    description.textContent = eventDescription(event);
-    item.append(tick, description);
-    container.append(item);
-  }
-}
-
-function renderAgentSheet() {
-  const selection = state.selection;
-  const detail = selection?.detail;
-  if (!detail) {
-    if (agentDialog.open) agentDialog.close();
-    return;
-  }
-  setText("agent-id", `Gaiano #${detail.id}`);
-  setText("agent-action", actionNames[detail.action] || detail.action, "sem ação");
-  setText("agent-position", formatPosition(detail.position || [detail.x, detail.y]));
-  const hunger = bounded(detail.body?.hunger);
-  const thirst = bounded(detail.body?.thirst);
-  $("agent-hunger").value = hunger;
-  $("agent-thirst").value = thirst;
-  setText("agent-hunger-value", Math.round(hunger));
-  setText("agent-thirst-value", Math.round(thirst));
-  setText("agent-generation", detail.generation, "0");
-  setText("agent-orientation", formatOrientation(detail.orientation));
-  setText("agent-carried", formatAppearance(detail.carried || detail.carrying));
-  $("agent-death").hidden = !selection.dead;
-  $("agent-follow").classList.toggle("active", state.following);
-  $("agent-perspective").classList.toggle("active", state.perspective === "agent");
-  if (!agentDialog.open && !memoryDialog.open) agentDialog.show();
-}
-
-function renderMemoryDetail(node) {
-  const container = $("memory-detail");
-  container.replaceChildren();
-  if (!node) {
-    const hint = document.createElement("p");
-    hint.textContent = "Selecione uma memória para examinar sua evidência.";
-    container.append(hint);
-    return;
-  }
-  const kicker = document.createElement("small");
-  const title = document.createElement("h3");
-  const raw = document.createElement("pre");
-  kicker.textContent = node.kind === "relation" ? "RELAÇÃO APRENDIDA" : "EXPERIÊNCIA";
-  title.textContent = node.label;
-  raw.textContent = JSON.stringify(node.data, null, 2);
-  container.append(kicker, title, raw);
-}
-
-function drawMemoryGraph() {
-  if (!memoryDialog.open || !state.memoryGraph) return;
-  state.memoryHits = memoryRenderer.draw(state.memoryGraph, state.selectedMemoryId);
-}
-
-function refreshMemoryGraph() {
-  if (!memoryDialog.open || !state.selection?.detail) return;
-  state.memoryGraph = buildMemoryGraph(state.selection.detail.memory);
-  const selected = state.memoryGraph.nodes.find((node) => node.id === state.selectedMemoryId);
-  if (!selected) state.selectedMemoryId = null;
-  renderMemoryDetail(selected);
-  requestAnimationFrame(drawMemoryGraph);
-}
-
-function openMemory() {
-  if (!state.selection?.detail) return;
-  state.memoryGraph = buildMemoryGraph(state.selection.detail.memory);
-  state.selectedMemoryId = null;
-  setText("memory-title", `Memórias de #${state.selectedId}`);
-  renderMemoryDetail(null);
-  if (agentDialog.open) agentDialog.close();
-  if (!memoryDialog.open) memoryDialog.showModal();
-  requestAnimationFrame(drawMemoryGraph);
-}
-
-function renderChrome() {
-  renderStatus();
-  renderEvents();
-  renderAgentSheet();
-  const hasSelection = Boolean(state.selection?.detail && !state.selection.dead);
-  $("follow-agent").disabled = !hasSelection;
-  $("follow-agent").classList.toggle("active", state.following);
-  $("global-view").hidden = state.perspective === "global";
-  setText("perspective-kicker", state.perspective === "agent" ? "CAMPO SENSORIAL" : "VISÃO DO OBSERVADOR");
-  setText(
-    "perspective-title",
-    state.perspective === "agent" ? `Percepção de #${state.selectedId}` : state.following ? `Acompanhando #${state.selectedId}` : "Mundo inteiro",
-  );
-}
-
-function acceptSnapshot(snapshot) {
-  const now = performance.now();
-  const effects = deriveWorldEffects(state.snapshot, snapshot)
-    .map((effect) => ({ ...effect, createdAt: now }));
-  state.effects = [...state.effects, ...effects].slice(-96);
-  state.previousSnapshot = state.snapshot;
-  state.snapshot = snapshot;
-  state.snapshotAt = now;
-  state.selection = reconcileSelection(
-    state.selectedId,
-    state.selection?.detail,
-    snapshot,
-  );
-  if (state.selectedId !== null && !state.selection) {
-    state.selectedId = null;
-    state.following = false;
-    state.perspective = "global";
-  }
-  if (!state.camera) fitWorld();
-  renderChrome();
-  refreshMemoryGraph();
-}
-
-function queueSnapshot() {
-  if (state.pollQueued) return;
-  state.pollQueued = true;
-  enqueue(async () => {
-    const selected = state.selectedId === null ? "" : `?selected=${encodeURIComponent(state.selectedId)}`;
-    try {
-      const snapshot = await fetchJson(`/api/snapshot${selected}`);
-      acceptSnapshot(snapshot);
-      setConnection(true, "observando");
-      const workerError = record(snapshot.control).error;
-      showError(workerError ? `Simulação interrompida: ${workerError}` : "");
-    } catch (error) {
-      setConnection(false, "reconectando");
-      showError(`A última visão foi preservada. ${error.message}`);
-    } finally {
-      state.pollQueued = false;
+function resetReading(){readingRequest++;ui.tab='summary';ui.reading=null;ui.readingLoading=false;ui.readingError='';}
+function clearSelection(){ui.selection=null;ui.cell=null;ui.detail=null;ui.following=false;resetReading();chrome();dirty=true;}
+function chrome(){
+  const scene=store.scene;if(!scene)return;
+  const control=scene.control;
+  const runState=control.running?'running':control.remaining?'burst':'paused';
+  $('world-dimensions').textContent=`${scene.width} × ${scene.height}`;
+  $('tick-value').textContent=`tick ${scene.tick}`;
+  $('population-value').textContent=`${scene.agents.length} vivos`;
+  $('run-state').textContent=runState==='running'?'EM CURSO':runState==='burst'?'RAJADA':'PAUSADA';
+  $('run-state').dataset.state=runState;
+  $('remaining-value').textContent=control.remaining?`${control.remaining} ticks restantes`:`${control.speed} ticks/s`;
+  if(document.activeElement!==$('speed-select')) {
+    if(![...$('speed-select').options].some(o=>Number(o.value)===control.speed)){
+      const o=document.createElement('option');o.value=control.speed;o.textContent=control.speed;$('speed-select').append(o);
     }
-  });
-}
-
-function setControlsDisabled(disabled) {
-  for (const element of document.querySelectorAll("#time-controls button, #time-controls input, #time-controls select")) {
-    element.disabled = disabled;
+    $('speed-select').value=String(control.speed);
   }
-}
-
-async function sendControl(command, value) {
-  if (state.controlBusy) return;
-  state.controlBusy = true;
-  setControlsDisabled(true);
-  await enqueue(async () => {
-    try {
-      const payload = { command };
-      if (value !== undefined) payload.value = value;
-      await fetchJson("/api/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      showError("");
-    } catch (error) {
-      showError(`Comando recusado: ${error.message}`);
-    } finally {
-      state.controlBusy = false;
-      setControlsDisabled(false);
-      queueSnapshot();
+  $('step-button').disabled=controlBusy||control.running||control.remaining>0;
+  $('run-button').classList.toggle('active',control.running);
+  $('pause-button').classList.toggle('active',!control.running&&!control.remaining);
+  const item=resolveSelection(scene,ui.selection);
+  if(ui.selection&&!item){ui.selection=null;ui.following=false;ui.detail=null;resetReading();}
+  $('follow-agent').disabled=item?.layer!=='agent';
+  $('follow-agent').classList.toggle('active',ui.following);
+  renderInspector($('inspector'),scene,item,ui.detail,{tab:ui.tab});
+  if(item?.layer==='agent'&&ui.tab!=='summary'){
+    $('reading-tick').textContent=ui.reading?`leitura fixada · tick ${ui.reading.tick}`:'leitura sob demanda';
+    $('refresh-inspection').disabled=ui.readingLoading;
+    $('history-status').textContent=ui.readingLoading?'Lendo registros…':ui.readingError;
+    renderAgentHistory($('history-content'),ui.reading?.detail,ui.tab);
+  }
+  const candidates=$('selection-candidates');candidates.replaceChildren();
+  if(item) {
+    // A selected entity follows its real cell; terrain selection stays fixed.
+    ui.cell={x:item.x,y:item.y};
+    for(const candidate of candidatesAt(scene,item.x,item.y)){
+      const button=document.createElement('button');
+      const layer=document.createElement('span'),name=document.createElement('span'),id=document.createElement('span');
+      layer.className='candidate-layer';layer.textContent=layerLabel(candidate.layer);
+      name.textContent=candidate.kind;id.className='candidate-id';id.textContent=candidate.layer==='terrain'?'':`#${candidate.id}`;
+      button.append(layer,name,id);
+      button.dataset.layer=candidate.layer;button.dataset.id=candidate.id;
+      button.classList.toggle('active',candidate.layer===item.layer&&candidate.id===item.id);
+      button.addEventListener('click',()=>select(candidate));candidates.append(button);
     }
+  }
+}
+function select(item){ui.selection=selectionKey(item);ui.detail=null;ui.following=false;resetReading();chrome();dirty=true;poll();}
+function loadReading(){
+  const item=resolveSelection(store.scene,ui.selection),tab=ui.tab;
+  if(item?.layer!=='agent'||tab==='summary')return;
+  const revision=store.scene.worldRevision,request=++readingRequest;
+  ui.readingLoading=true;ui.readingError='';chrome();
+  enqueue(async()=>{
+    try{
+      const result=await transport.detail(item,tab);
+      if(request!==readingRequest)return;
+      if(result.schemaVersion!==store.scene.schemaVersion||result.worldRevision!==revision||revision!==store.scene.worldRevision)
+        throw new Error('O mundo mudou. Selecione novamente o gaiano.');
+      if(!result.detail||result.detail.agentId!==item.id)throw new Error('Este gaiano não está mais disponível.');
+      ui.reading=result;
+    }catch(e){if(request===readingRequest)ui.readingError=`Não foi possível atualizar: ${e.message}`;}
+    finally{if(request===readingRequest){ui.readingLoading=false;chrome();}}
   });
 }
-
-function selectAgent(id) {
-  state.selectedId = id;
-  const agent = list(state.snapshot?.agents).find((candidate) => sameId(candidate.id, id));
-  if (agent) {
-    state.selection = {
-      id: agent.id,
-      dead: false,
-      detail: { ...agent, position: [agent.x, agent.y], carried: agent.carrying },
-    };
-    renderChrome();
-  }
-  queueSnapshot();
+function setTab(tab){
+  if(resolveSelection(store.scene,ui.selection)?.layer!=='agent')return;
+  if(ui.tab===tab)return;
+  resetReading();ui.tab=tab;chrome();if(tab!=='summary')loadReading();
 }
-
-let pointer = null;
-canvas.addEventListener("pointerdown", (event) => {
-  if (state.perspective !== "global" || event.button !== 0) return;
-  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-  canvas.setPointerCapture(event.pointerId);
-  canvas.classList.add("dragging");
+function accept(data,bootstrap=false){
+  const oldRevision=store.scene?.worldRevision;
+  if(bootstrap)store.bootstrap(data);
+  else if(store.applyFrame(data)==='resync')return false;
+  if(oldRevision&&oldRevision!==store.scene.worldRevision){ui.selection=null;ui.detail=null;ui.camera=null;ui.following=false;resetReading();}
+  snapshotAt=performance.now();
+  if(!ui.camera)fit();
+  if(ui.following){const a=resolveSelection(store.scene,ui.selection);if(a)ui.camera=centerCameraOn(ui.camera,a.x,a.y,viewport());}
+  chrome();dirty=true;return true;
+}
+function poll(){
+  if(pollQueued)return;
+  pollQueued=true;
+  enqueue(async()=>{
+    try{
+      const initial=!store.scene;
+      const data=await(initial?transport.bootstrap():transport.frame());
+      if(!accept(data,initial))accept(await transport.bootstrap(),true);
+      $('connection-label').textContent='conectado';
+      $('connection-label').dataset.state='connected';
+      error(store.scene.control.error?`Simulação interrompida: ${store.scene.control.error}`:'');
+      const item=resolveSelection(store.scene,ui.selection);
+      if(item){
+        const selected=ui.selection,revision=store.scene.worldRevision;
+        const detail=await transport.detail(item);
+        if(selected===ui.selection&&revision===detail.worldRevision&&detail.tick>=store.scene.tick){
+          ui.detail=detail.detail;chrome();
+        }
+      }
+    }catch(e){
+      $('connection-label').textContent='reconectando';
+      $('connection-label').dataset.state='reconnecting';
+      error(`Última cena preservada. ${e.message}`);
+    }
+    finally{pollQueued=false;}
+  });
+}
+function control(command,value){
+  if(controlBusy)return;
+  controlBusy=true;
+  for(const el of document.querySelectorAll('#time-controls button, #time-controls input, #time-controls select'))el.disabled=true;
+  enqueue(async()=>{
+    try{await transport.control(command,value);error();}
+    catch(e){error(e.message);}
+    finally{controlBusy=false;for(const el of document.querySelectorAll('#time-controls button, #time-controls input, #time-controls select'))el.disabled=false;chrome();poll();}
+  });
+}
+let pointer=null;
+canvas.addEventListener('pointerdown',e=>{
+  if(e.button!==0)return;canvas.focus();
+  pointer={id:e.pointerId,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false};
+  canvas.setPointerCapture(e.pointerId);
 });
-
-canvas.addEventListener("pointermove", (event) => {
-  if (!pointer || pointer.id !== event.pointerId || !state.camera) return;
-  const dx = event.clientX - pointer.x;
-  const dy = event.clientY - pointer.y;
-  if (Math.abs(dx) + Math.abs(dy) > 2) pointer.moved = true;
-  state.camera = panCamera(state.camera, dx, dy);
-  state.following = false;
-  pointer.x = event.clientX;
-  pointer.y = event.clientY;
-});
-
-canvas.addEventListener("pointerup", (event) => {
-  if (!pointer || pointer.id !== event.pointerId) return;
-  canvas.classList.remove("dragging");
-  if (!pointer.moved) {
-    const bounds = canvas.getBoundingClientRect();
-    const x = event.clientX - bounds.left;
-    const y = event.clientY - bounds.top;
-    const hit = state.hits.findLast((region) => Math.hypot(x - region.x, y - region.y) <= region.radius);
-    if (hit) selectAgent(hit.id);
-  }
-  pointer = null;
-});
-
-canvas.addEventListener("pointercancel", () => {
-  pointer = null;
-  canvas.classList.remove("dragging");
-});
-
-canvas.addEventListener("wheel", (event) => {
-  if (!state.camera || state.perspective !== "global") return;
-  event.preventDefault();
-  const bounds = canvas.getBoundingClientRect();
-  state.camera = zoomCameraAt(
-    state.camera,
-    event.clientX - bounds.left,
-    event.clientY - bounds.top,
-    event.deltaY < 0 ? 1.14 : 1 / 1.14,
-  );
-  state.following = false;
-}, { passive: false });
-
-$("fit-world").addEventListener("click", () => { state.following = false; fitWorld(); renderChrome(); });
-$("follow-agent").addEventListener("click", () => setFollowing(!state.following));
-$("global-view").addEventListener("click", () => setPerspective("global"));
-$("run-button").addEventListener("click", () => sendControl("run"));
-$("pause-button").addEventListener("click", () => sendControl("pause"));
-$("step-button").addEventListener("click", () => sendControl("step"));
-$("speed-select").addEventListener("change", (event) => sendControl("speed", Number(event.target.value)));
-$("burst-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  sendControl("burst", Number($("burst-value").value));
-});
-$("agent-follow").addEventListener("click", () => setFollowing(!state.following));
-$("agent-perspective").addEventListener("click", () => {
-  setPerspective(state.perspective === "agent" ? "global" : "agent");
-  if (agentDialog.open) agentDialog.close();
-});
-$("agent-memory").addEventListener("click", () => {
-  openMemory();
-});
-
-memoryCanvas.addEventListener("click", (event) => {
-  const bounds = memoryCanvas.getBoundingClientRect();
-  const x = event.clientX - bounds.left;
-  const y = event.clientY - bounds.top;
-  const hit = state.memoryHits.findLast((node) => Math.hypot(x - node.x, y - node.y) <= node.radius);
-  state.selectedMemoryId = hit?.id || null;
-  const selected = state.memoryGraph?.nodes.find((node) => node.id === state.selectedMemoryId);
-  renderMemoryDetail(selected);
-  drawMemoryGraph();
-});
-
-memoryDialog.addEventListener("close", () => {
-  state.memoryGraph = null;
-  state.memoryHits = [];
-  state.selectedMemoryId = null;
-  renderAgentSheet();
-});
-
-window.addEventListener("resize", () => {
-  if (memoryDialog.open) requestAnimationFrame(drawMemoryGraph);
-});
-
-document.addEventListener("keydown", (event) => {
-  const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName);
-  if (event.key === "Escape") {
-    if (memoryDialog.open) memoryDialog.close();
-    else if (agentDialog.open) agentDialog.close();
-    else if (state.perspective === "agent") setPerspective("global");
-    return;
-  }
-  if (editing || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.key === " ") {
-    event.preventDefault();
-    sendControl(state.snapshot?.control?.running ? "pause" : "run");
-  } else if (event.key === ".") {
-    sendControl("step");
-  } else if (event.key.toLowerCase() === "f") {
-    setFollowing(!state.following);
-  } else if (event.key === "0") {
-    state.following = false;
-    fitWorld();
-    renderChrome();
-  } else if (state.camera && state.perspective === "global" && event.key.startsWith("Arrow")) {
-    event.preventDefault();
-    const distance = 42;
-    const offsets = {
-      ArrowLeft: [distance, 0], ArrowRight: [-distance, 0],
-      ArrowUp: [0, distance], ArrowDown: [0, -distance],
-    }[event.key];
-    state.camera = panCamera(state.camera, ...offsets);
-    state.following = false;
+canvas.addEventListener('pointermove',e=>{
+  if(!ui.camera)return;
+  const rect=canvas.getBoundingClientRect();
+  if(pointer&&pointer.id===e.pointerId){
+    const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;
+    if(Math.hypot(e.clientX-pointer.startX,e.clientY-pointer.startY)>4)pointer.moved=true;
+    if(pointer.moved){ui.camera=panCamera(ui.camera,dx,dy);ui.following=false;dirty=true;}
+    pointer.x=e.clientX;pointer.y=e.clientY;
+  }else{
+    const candidates=renderer.hitTest({x:e.clientX-rect.left,y:e.clientY-rect.top});
+    const item=candidates[0];
+    $('world-hover').textContent=item
+      ?`[${item.kind}] · ${item.x}, ${item.y}`
+      :'';
   }
 });
-
-window.addEventListener("online", queueSnapshot);
-window.addEventListener("offline", () => {
-  setConnection(false, "sem conexão");
-  showError("A última visão foi preservada. Rede indisponível.");
+canvas.addEventListener('pointerup',e=>{
+  if(!pointer||pointer.id!==e.pointerId)return;
+  if(!pointer.moved){const rect=canvas.getBoundingClientRect();const hit=renderer.hitTest({x:e.clientX-rect.left,y:e.clientY-rect.top});if(hit.length)select(hit[0]);else clearSelection();}
+  canvas.releasePointerCapture(e.pointerId);pointer=null;
 });
-
-function draw(now) {
-  state.effects = state.effects.filter((effect) => now - effect.createdAt < 1300);
-  if (state.following) centerOnSelected();
-  if (state.perspective === "agent") {
-    state.hits = renderer.drawPerception(state.selection?.detail);
-  } else {
-    state.hits = renderer.draw(state.snapshot, state.camera, {
-      previousSnapshot: state.previousSnapshot,
-      motionProgress: reducedMotion.matches ? 1 : Math.min(1, (now - state.snapshotAt) / 170),
-      selectedId: state.selectedId,
-      effects: state.effects,
-      now,
-    });
+canvas.addEventListener('pointercancel',()=>pointer=null);
+canvas.addEventListener('pointerleave',()=>{$('world-hover').textContent='';});
+canvas.addEventListener('wheel',e=>{
+  if(!ui.camera)return;e.preventDefault();const rect=canvas.getBoundingClientRect();
+  ui.camera=zoomCameraAt(ui.camera,e.clientX-rect.left,e.clientY-rect.top,e.deltaY<0?1.2:1/1.2);
+  ui.following=false;dirty=true;
+},{passive:false});
+$('fit-world').onclick=()=>{ui.following=false;fit();};
+$('close-inspector').onclick=clearSelection;
+$('refresh-inspection').onclick=loadReading;
+for(const button of document.querySelectorAll('[data-tab]')){
+  button.onclick=()=>setTab(button.dataset.tab);
+  button.addEventListener('keydown',e=>{
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+    e.preventDefault();e.stopPropagation();
+    const tabs=[...document.querySelectorAll('[data-tab]')],index=tabs.indexOf(button);
+    const next=e.key==='Home'?0:e.key==='End'?2:(index+(e.key==='ArrowLeft'?2:1))%3;
+    tabs[next].focus();setTab(tabs[next].dataset.tab);
+  });
+}
+$('follow-agent').onclick=()=>{ui.following=!ui.following;const a=resolveSelection(store.scene,ui.selection);if(a&&ui.following)ui.camera=centerCameraOn(ui.camera,a.x,a.y,viewport());chrome();dirty=true;};
+$('run-button').onclick=()=>control('run');
+$('pause-button').onclick=()=>control('pause');
+$('step-button').onclick=()=>control('step');
+$('speed-select').onchange=e=>control('speed',Number(e.target.value));
+$('burst-form').onsubmit=e=>{e.preventDefault();control('burst',Number($('burst-value').value));};
+document.addEventListener('keydown',e=>{
+  if(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==='Escape')clearSelection();
+  else if(e.key===' '){e.preventDefault();control(store.scene?.control.running||store.scene?.control.remaining?'pause':'run');}
+  else if(e.key==='.')control('step');
+  else if(e.key==='0')fit();
+  else if(e.key.toLowerCase()==='f')$('follow-agent').click();
+  else if(ui.camera&&e.key.startsWith('Arrow')){
+    const delta={ArrowLeft:[40,0],ArrowRight:[-40,0],ArrowUp:[0,40],ArrowDown:[0,-40]}[e.key];
+    if(delta){e.preventDefault();ui.camera=panCamera(ui.camera,...delta);ui.following=false;dirty=true;}
+  }
+});
+new ResizeObserver(()=>{renderer?.resize(viewport());dirty=true;}).observe(canvas);
+function draw(now){
+  const p=reducedMotion.matches?1:Math.min(1,(now-snapshotAt)/150);
+  if(renderer&&ui.camera&&store.scene&&(dirty||p<1)){
+    renderer.render(store.scene,ui.camera,{selection:ui.selection,previous:store.previous,motionProgress:p});
+    $('map-scale').textContent=`1 célula · ${Math.round(ui.camera.cell)} px`;
+    dirty=p<1;
   }
   requestAnimationFrame(draw);
 }
-
-setConnection(false, "conectando");
-renderChrome();
-queueSnapshot();
-setInterval(queueSnapshot, 200);
-requestAnimationFrame(draw);
+async function start(){
+  renderer=assertRenderer(new AsciiRenderer());
+  renderer.mount(canvas);renderer.resize(viewport());
+  paintKey();poll();timer=setInterval(poll,200);requestAnimationFrame(draw);
+}
+addEventListener('pagehide',()=>{clearInterval(timer);renderer?.dispose();});
+start();

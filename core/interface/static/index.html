@@ -1,94 +1,86 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>Gaea — Mundo vivo</title>
-  <link rel="stylesheet" href="/style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gaea — observatório</title><link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="observer-shell">
-    <header id="world-status" class="world-status">
-      <div class="brand" aria-label="Gaea, mundo vivo">
-        <span class="brand-rune" aria-hidden="true">G</span>
-        <div><strong>GAEA</strong><small>MUNDO VIVO</small></div>
-      </div>
-      <div class="world-readout" aria-live="polite">
-        <span><small>ERA</small><strong id="tick-value">0</strong></span>
-        <span><small>VIVOS</small><strong id="alive-value">—</strong></span>
-        <span class="wide-readout"><small>GERAÇÃO</small><strong id="generation-value">—</strong></span>
-        <span class="wide-readout"><small>NASC · MORT</small><strong><i id="births-value">0</i> · <i id="deaths-value">0</i></strong></span>
-      </div>
-      <div class="connection" aria-live="polite">
-        <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
-        <span><strong id="run-state">PAUSADA</strong><small id="connection-label">conectando</small></span>
-      </div>
-    </header>
-
-    <section class="world-stage" aria-label="Observação do mundo">
-      <canvas id="world-canvas" tabindex="0" aria-label="Mapa top-down do mundo de Gaea"></canvas>
-      <div class="perspective-label">
-        <small id="perspective-kicker">VISÃO DO OBSERVADOR</small>
-        <strong id="perspective-title">Mundo inteiro</strong>
-      </div>
-      <nav class="map-tools" aria-label="Câmera">
-        <button id="fit-world" type="button" title="Enquadrar o mundo (0)">⌗<span>Enquadrar</span></button>
-        <button id="follow-agent" type="button" title="Acompanhar seleção (F)" disabled>◎<span>Acompanhar</span></button>
-        <button id="global-view" type="button" title="Voltar à visão global" hidden>◫<span>Mundo</span></button>
-      </nav>
-      <details id="event-log" class="event-log" open>
-        <summary><span>ACONTECIMENTOS</span><i id="event-count">0</i></summary>
-        <ol id="event-list"></ol>
+<main class="observer-shell">
+  <header id="world-status">
+    <div class="brand-block">
+      <strong class="wordmark">gaea</strong>
+      <span class="header-caption">observatório</span>
+    </div>
+    <div class="status-metrics" aria-live="polite">
+      <span id="world-dimensions"></span>
+      <span id="tick-value">tick 0</span>
+      <span id="population-value"></span>
+    </div>
+    <div class="status-flags">
+      <span id="run-state" data-state="paused">PAUSADA</span>
+      <span id="connection-label" data-state="connecting">conectando</span>
+    </div>
+  </header>
+  <section class="world-stage" aria-label="Mundo">
+    <canvas id="world-canvas" tabindex="0" aria-label="Mundo top-down: arraste para navegar, clique para selecionar"></canvas>
+    <div class="map-tools">
+      <button id="fit-world" title="Enquadrar (0)">enquadrar <kbd>0</kbd></button>
+      <button id="follow-agent" title="Acompanhar (F)" disabled>acompanhar <kbd>F</kbd></button>
+      <details id="map-key">
+        <summary>chave ASCII</summary>
+        <div class="symbol-key">
+          <p class="section-label">TERRENO</p>
+          <div><canvas data-symbol="terrain:grass"></canvas><span>" <small>grass</small></span></div>
+          <div><canvas data-symbol="terrain:water"></canvas><span>~ <small>water</small></span></div>
+          <div><canvas data-symbol="terrain:stone"></canvas><span># <small>stone</small></span></div>
+          <p class="section-label">OBJETOS</p>
+          <div><canvas data-symbol="object:food"></canvas><span>o <small>food</small></span></div>
+          <div><canvas data-symbol="object:water"></canvas><span>~ <small>water</small></span></div>
+          <div><canvas data-symbol="object:stone"></canvas><span>* <small>stone</small></span></div>
+          <div><canvas data-symbol="object:stack"></canvas><span>& <small>pilha</small></span></div>
+          <p class="section-label">INDIVÍDUOS</p>
+          <div><canvas data-symbol="agent:gaiano"></canvas><span>@ <small>gaiano</small></span></div>
+        </div>
       </details>
-      <p id="error-banner" class="error-banner" role="alert" hidden></p>
-      <p class="map-hint">arraste para mover · roda para aproximar · clique num gaiano para observar</p>
-    </section>
-
-    <nav id="time-controls" class="time-controls" aria-label="Tempo da simulação">
-      <div class="transport">
-        <button id="run-button" class="transport-primary" type="button" title="Continuar (Espaço)"><span aria-hidden="true">▶</span>Continuar</button>
-        <button id="pause-button" type="button" title="Pausar (Espaço)"><span aria-hidden="true">Ⅱ</span>Pausar</button>
-        <button id="step-button" type="button" title="Avançar um tick (.)"><span aria-hidden="true">›|</span>Passo</button>
+    </div>
+    <div class="map-caption"><output id="world-hover" aria-live="polite"></output><span id="map-hint">arraste para navegar · roda para aproximar · clique para inspecionar</span></div>
+    <span id="map-scale"></span>
+    <p id="error-banner" role="alert" hidden></p>
+    <aside id="inspector" aria-label="Inspeção contextual" hidden>
+      <header class="inspector-heading">
+        <canvas id="inspector-symbol" aria-hidden="true"></canvas>
+        <div><p class="section-label" data-category></p><h2 data-title></h2></div>
+        <button id="close-inspector" aria-label="Fechar inspeção" title="Fechar (Esc)">×</button>
+      </header>
+      <div class="cell-section">
+        <p class="section-label" id="cell-label">NA CÉLULA</p>
+        <div id="selection-candidates" aria-label="Elementos da célula"></div>
       </div>
-      <label class="compact-field"><span>Ritmo</span><select id="speed-select">
-        <option value="2">2/s</option><option value="10">10/s</option>
-        <option value="20" selected>20/s</option><option value="60">60/s</option>
-        <option value="200">200/s</option>
-      </select></label>
-      <form id="burst-form" class="burst-form">
-        <label class="compact-field"><span>Avançar</span><input id="burst-value" type="number" min="1" max="1000000" value="100" required></label>
-        <button type="submit">Executar</button>
-      </form>
-      <span id="remaining-value" class="remaining-value">tempo suspenso</span>
-    </nav>
-
-    <dialog id="agent-dialog" class="agent-dialog" aria-labelledby="agent-id">
-      <form method="dialog" class="dialog-close"><button aria-label="Fechar ficha">×</button></form>
-      <header><small>INDIVÍDUO OBSERVADO</small><h2 id="agent-id">Gaiano</h2><p id="agent-death" class="death-notice" hidden>morreu neste tick</p></header>
-      <div class="agent-now">
-        <span><small>AÇÃO</small><strong id="agent-action">—</strong></span>
-        <span><small>POSIÇÃO</small><strong id="agent-position">—</strong></span>
+      <div id="inspector-tabs" role="tablist" aria-label="Inspeção do gaiano" hidden>
+        <button id="tab-summary" role="tab" data-tab="summary" aria-selected="true" aria-controls="inspector-summary">Corpo</button>
+        <button id="tab-memory" role="tab" data-tab="memory" aria-selected="false" aria-controls="history-panel">Memória</button>
+        <button id="tab-log" role="tab" data-tab="log" aria-selected="false" aria-controls="history-panel">Registro</button>
       </div>
-      <div class="need-row"><label for="agent-hunger">Fome</label><progress id="agent-hunger" max="100" value="0"></progress><output id="agent-hunger-value">0</output></div>
-      <div class="need-row"><label for="agent-thirst">Sede</label><progress id="agent-thirst" max="100" value="0"></progress><output id="agent-thirst-value">0</output></div>
-      <dl class="agent-meta">
-        <div><dt>Geração</dt><dd id="agent-generation">—</dd></div>
-        <div><dt>Orientação</dt><dd id="agent-orientation">—</dd></div>
-        <div><dt>Carga</dt><dd id="agent-carried">sem carga</dd></div>
-      </dl>
-      <footer>
-        <button id="agent-follow" type="button">◎ Acompanhar</button>
-        <button id="agent-perspective" type="button">◉ Visão do agente</button>
-        <button id="agent-memory" class="accent" type="button">⌘ Memórias</button>
-      </footer>
-    </dialog>
-
-    <dialog id="memory-dialog" class="memory-dialog" aria-labelledby="memory-title">
-      <header><div><small>MAPA COGNITIVO</small><h2 id="memory-title">Memórias</h2></div><form method="dialog"><button aria-label="Fechar memórias">×</button></form></header>
-      <div class="memory-stage"><canvas id="memory-canvas" aria-label="Grafo de memórias do agente"></canvas><aside id="memory-detail"><p>Selecione uma memória para examinar sua evidência.</p></aside></div>
-    </dialog>
-  </main>
-  <script type="module" src="/app.mjs"></script>
+      <section id="inspector-summary" role="tabpanel" aria-labelledby="tab-summary"><dl data-fields></dl></section>
+      <section id="history-panel" role="tabpanel" hidden>
+        <div class="reading-toolbar"><span id="reading-tick">leitura sob demanda</span><button id="refresh-inspection">atualizar</button></div>
+        <p id="history-status" role="status"></p>
+        <div id="history-content"></div>
+      </section>
+      <footer class="inspector-footnote">Visão do pesquisador · nenhuma ordem é enviada ao gaiano.</footer>
+    </aside>
+  </section>
+  <nav id="time-controls" aria-label="Tempo da simulação">
+    <div class="playback-group">
+      <button id="run-button" title="Executar (Espaço)"><span aria-hidden="true">▶</span> play</button>
+      <button id="pause-button" title="Pausar (Espaço)"><span aria-hidden="true">Ⅱ</span> pause</button>
+      <button id="step-button" title="Um tick (.)"><span aria-hidden="true">›|</span> step</button>
+    </div>
+    <label class="speed-control">ritmo <select id="speed-select" aria-label="Velocidade em ticks por segundo"><option>2</option><option>10</option><option selected>20</option><option>60</option><option>200</option></select><span>ticks/s</span></label>
+    <form id="burst-form"><label for="burst-value">rajada</label><input id="burst-value" aria-label="Ticks na rajada" type="number" min="1" max="1000000" value="100"><span>ticks</span><button>executar</button></form>
+    <span id="remaining-value"></span>
+  </nav>
+</main>
+<script type="module" src="/app.mjs"></script>
 </body>
 </html>

@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from core.representation import RepresentationProjector
+
 
 DEFAULT_SPEED = 20.0
 MIN_SPEED = 0.1
@@ -69,6 +71,7 @@ class SimulationController:
 
     def __init__(self, simulation):
         self.simulation = simulation
+        self._projector = None
         self._condition = threading.Condition(threading.RLock())
         self._running = False
         self._speed = DEFAULT_SPEED
@@ -161,6 +164,19 @@ class SimulationController:
                 "tick": self.simulation.tick,
                 "control": self._state_unlocked(),
             }
+
+    def representation(self, resource, layer=None, identifier=None, section='summary'):
+        with self._condition:
+            if self._projector is None:
+                self._projector = RepresentationProjector(self.simulation)
+            if resource == 'bootstrap':
+                result = self._projector.bootstrap()
+            elif resource == 'frame':
+                result = self._projector.frame()
+            else:
+                result = self._projector.detail(layer, identifier, section)
+            result['control'] = self._state_unlocked()
+            return result
 
     def close(self) -> None:
         with self._condition:
@@ -274,6 +290,10 @@ class ObserverRequestHandler(BaseHTTPRequestHandler):
             "/style.css": "style.css",
         }
         filename = files.get(path)
+        if filename is None and re.fullmatch(r'/[a-zA-Z0-9_/-]+\.(mjs|css|json|png|woff2)', path):
+            candidate = (STATIC_ROOT / path.lstrip('/')).resolve()
+            if candidate.is_relative_to(STATIC_ROOT.resolve()) and candidate.is_file():
+                filename = path.lstrip('/')
         if filename is None:
             self._error(404, "recurso não encontrado")
             return
@@ -347,6 +367,29 @@ class ObserverRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlsplit(self.path)
+        if parsed.path in ('/api/bootstrap', '/api/frame') or parsed.path.startswith('/api/selection/'):
+            try:
+                resource = parsed.path.rsplit('/', 1)[-1]
+                layer = identifier = None
+                section = 'summary'
+                if parsed.path.startswith('/api/selection/'):
+                    parts = parsed.path.split('/')[3:]
+                    if len(parts) == 3 and parts[0] == 'cell':
+                        layer, identifier = 'terrain', (int(parts[1]), int(parts[2]))
+                    elif len(parts) == 2 and parts[0] in ('agent', 'object'):
+                        layer, identifier = parts[0], int(parts[1])
+                    elif len(parts) == 3 and parts[0] == 'agent' and parts[2] in ('memory', 'log'):
+                        layer, identifier, section = 'agent', int(parts[1]), parts[2]
+                    else:
+                        raise ValueError('seleção inválida')
+                    resource = 'detail'
+                result = self.server.controller.representation(resource, layer, identifier, section)
+                self._send_json(200, result)
+            except ValueError:
+                self._error(400, 'consulta inválida')
+            except Exception:
+                self._error(500, 'não foi possível obter representação')
+            return
         if parsed.path == "/api/snapshot":
             selected_values = parse_qs(parsed.query, keep_blank_values=True).get("selected", [])
             if len(selected_values) > 1:

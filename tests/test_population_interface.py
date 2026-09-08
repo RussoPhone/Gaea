@@ -204,6 +204,25 @@ def test_snapshot_localiza_evento_sem_expor_efeito_fisico():
     assert "effect" not in event
 
 
+def test_snapshot_expoe_tipos_visuais_sem_expor_efeitos_fisicos():
+    simulation = PopulationSimulation(
+        PopulationConfig(
+            width=7,
+            height=7,
+            population=0,
+            objects=3,
+            stones=1,
+            reproduction=False,
+        )
+    )
+
+    snapshot = simulation.snapshot()
+
+    assert {tile["kind"] for tile in snapshot["terrain"]} == {"ground", "stone"}
+    assert {obj["kind"] for obj in snapshot["objects"]} == {"food", "water", "stone"}
+    assert all("effect" not in obj for obj in snapshot["objects"])
+
+
 def test_pagina_observadora_e_assets_sao_servidos():
     simulation = MinimalSimulation()
     with running_server(simulation) as server:
@@ -214,23 +233,30 @@ def test_pagina_observadora_e_assets_sao_servidos():
         assert html.count(b'id="world-canvas"') == 1
         for element_id in (
             b"world-status",
-            b"event-log",
-            b"agent-dialog",
-            b"memory-dialog",
+            b"world-hover",
+            b"inspector",
+            b"selection-candidates",
             b"time-controls",
         ):
             assert b'id="' + element_id + b'"' in html
+        assert b"renderer-select" not in html
+        assert b"Geometric" not in html
+        assert b"Pseudo-3D" not in html
+        assert b"chave ASCII" in html
         for asset in (
             "app.mjs",
             "camera.mjs",
             "presentation.mjs",
             "memory-graph.mjs",
             "world-renderer.mjs",
+            "renderers/ascii-renderer.mjs",
         ):
             asset_status, body = request(server, "GET", f"/{asset}")
             assert asset_status == 200
             assert body
         assert b"canvas" in stylesheet
+        assert request(server, "GET", "/renderers/style-registry.mjs")[0] == 404
+        assert request(server, "GET", "/renderers/styles/geometric.mjs")[0] == 404
 
 
 def test_step_pausado_avanca_exatamente_um_tick():

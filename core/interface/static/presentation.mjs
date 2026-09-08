@@ -6,6 +6,11 @@ function sameId(left, right) {
   return String(left) === String(right);
 }
 
+export function updateConnection(root, _online, detail) {
+  const label = root.getElementById("connection-label");
+  if (label) label.textContent = detail;
+}
+
 export function actionGlyph(action) {
   return ({
     move: "›",

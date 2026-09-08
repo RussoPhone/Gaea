@@ -1,8 +1,7 @@
 from core.being.entity import Entity
 from core.being.body import Body
-from typing import Optional, TYPE_CHECKING
-if TYPE_CHECKING:
-    from core.sense.sensor import Sensor 
+from typing import Any, Optional
+
 
 class Organism(Entity):
     def __init__(self, name, symbol, x, y, sensor=None, decision=None, memory=None):
@@ -11,9 +10,10 @@ class Organism(Entity):
         self.body = Body() #Necessidades, vida e morte
         self.memory = memory #padrões aprendido, inc futuro
         self.decision_system = decision #escolha de ação, inc futura
-        self.sensor: Optional["Sensor"] = sensor 
+        # Optional sensor belongs to the historical Simulation path; PopulationSimulation ignores it.
+        self.sensor: Optional[Any] = sensor
         self.orientation: tuple[int, int] = (0, -1)
-    
+
     def update(self, world):
         if not self.body.alive:
             self.record_action("dead")
