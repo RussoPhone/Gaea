@@ -72,9 +72,10 @@ export class BaseRenderer {
     const visible=(this.agentHits||[]).map(hit=>({...hit,distance:Math.min(...hit.centers.map(center=>
       Math.hypot(point.x-center.x,point.y-center.y)))}))
       .filter(hit=>hit.distance<=hit.radius).sort((a,b)=>a.distance-b.distance)[0];
-    if(visible)return candidatesAt(this.scene,visible.agent.x,visible.agent.y);
+    if(visible)return candidatesAt(this.scene,visible.agent.x,visible.agent.y,
+      {layer:'agent',id:visible.agent.id});
     const world=screenToWorld(this.camera,point.x,point.y);
-    return candidatesAt(this.scene,Math.floor(world.x),Math.floor(world.y));
+    return candidatesAt(this.scene,Math.floor(world.x),Math.floor(world.y),{layer:'terrain'});
   }
   dispose(){this.scene=null;this.surface=null;this.ctx=null;this.camera=null;this.agentHits=[];}
 }

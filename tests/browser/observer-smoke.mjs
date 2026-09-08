@@ -96,8 +96,16 @@ try {
     if(await page.locator('#inspector').isVisible()) await page.locator('#close-inspector').click();
     await page.mouse.click(box.x+camera.offsetX+(x+.5)*camera.cell,box.y+camera.offsetY+(y+.5)*camera.cell);
   };
+  const clickAgent=async(item)=>{
+    if(await page.locator('#inspector').isVisible()) await page.locator('#close-inspector').click();
+    const [mx,my]=item.micro_position;
+    await page.mouse.click(box.x+camera.offsetX+(mx+.5)*camera.cell/3,
+      box.y+camera.offsetY+(my+.5)*camera.cell/3);
+  };
   const title=()=>page.locator('#inspector [data-title]').innerText();
   await clickCell(agent.x,agent.y);
+  await page.waitForFunction(()=>document.querySelector('#inspector [data-title]').textContent==='grass');
+  await clickAgent(agent);
   await page.waitForFunction(id=>document.querySelector('#inspector [data-title]').textContent===`gaiano #${id}`,agent.id);
   assert.match(await page.locator('#inspector').innerText(),/orientação[\s\S]*fome[\s\S]*sede[\s\S]*geração[\s\S]*carga/);
   assert.equal(requests.some(p=>p.endsWith('/memory')||p.endsWith('/log')),false);
@@ -160,20 +168,21 @@ try {
   await page.mouse.move(box.x+200,box.y+200);await page.mouse.down();
   await page.mouse.move(box.x+240,box.y+225,{steps:5});await page.mouse.up();
   camera={...camera,offsetX:camera.offsetX+40,offsetY:camera.offsetY+25};
-  await clickCell(agent.x,agent.y);
+  await clickAgent(agent);
   assert.equal(await title(),`gaiano #${agent.id}`);
   await page.locator('#close-inspector').click();
   const anchor={x:box.width/2,y:box.height/2};
   await page.mouse.move(box.x+anchor.x,box.y+anchor.y);await page.mouse.wheel(0,-120);
   camera=await page.evaluate(async({camera,anchor})=>(await import('/camera.mjs')).zoomCameraAt(camera,anchor.x,anchor.y,1.2),{camera,anchor});
   await page.waitForTimeout(100);
-  await clickCell(agent.x,agent.y);
+  await clickAgent(agent);
   assert.equal(await title(),`gaiano #${agent.id}`);
   const scaleBefore=await page.locator('#map-scale').innerText();
   assert.equal(await page.locator('#renderer-select').count(),0);
   assert.equal(await title(),`gaiano #${agent.id}`);
   assert.equal(await page.locator('#map-scale').innerText(),scaleBefore);
-  const agentScreen={x:box.x+camera.offsetX+(agent.x+.5)*camera.cell,y:box.y+camera.offsetY+(agent.y+.5)*camera.cell};
+  const agentScreen={x:box.x+camera.offsetX+(agent.micro_position[0]+.5)*camera.cell/3,
+    y:box.y+camera.offsetY+(agent.micro_position[1]+.5)*camera.cell/3};
   await page.mouse.move(agentScreen.x+3,agentScreen.y+3);await page.mouse.move(agentScreen.x,agentScreen.y);
   await page.waitForFunction(()=>document.querySelector('#world-hover').textContent.includes('[gaiano]'));
   await page.locator('#world-canvas').focus();await page.keyboard.press('r');

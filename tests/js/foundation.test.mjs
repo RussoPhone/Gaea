@@ -81,7 +81,8 @@ test('ascii renderer consumes a frozen scene and exposes the picking contract',(
   const renderer=assertRenderer(new AsciiRenderer());renderer.mount(surface);
   renderer.resize({width:200,height:200,ratio:1});
   renderer.render(scene,{cell:24,offsetX:0,offsetY:0},options);
-  assert.equal(renderer.hitTest({x:12,y:12}).length,4);
+  assert.equal(renderer.hitTest({x:12,y:12})[0].layer,'agent');
+  assert.equal(renderer.hitTest({x:22,y:22})[0].layer,'terrain');
   assert.equal(renderer.hitTest({x:150,y:150}).length,0);
   renderer.dispose();
   assert.ok(calls.some(c=>c[0]==='fillText'));
