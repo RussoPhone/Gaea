@@ -34,7 +34,7 @@
 - Produces: `occurrence_from_action(view: View, action: Action) -> PerceivedOccurrence` and `form_experience(before: View, occurrence: PerceivedOccurrence, after: View, provenance: Provenance) -> Experience | None`.
 - Consumes: only immutable `View`, `Observation`, and `Action` values from `core/cognition/records.py`.
 
-- [ ] **Step 1: Write failing formation tests**
+- [x] **Step 1: Write failing formation tests**
 
 Add tests with hand-written `View`s that assert: internal changes come from body vectors; item movement/absence comes from before/after observations; an unchanged interval is valid; missing `after` returns `None`; action conversion copies only perceived target data; and `Experience` has no `success`, physical effect, quantity, or kind fields.
 
@@ -48,13 +48,13 @@ assert any(change.attribute == 'presence' and change.after is False for change i
 assert not hasattr(experience, 'success')
 ```
 
-- [ ] **Step 2: Run the new tests and verify RED**
+- [x] **Step 2: Run the new tests and verify RED**
 
 Run: `python -m pytest tests/test_relational_experience.py -q`
 
 Expected: collection fails because `core.cognition.experience` and the new record types do not exist.
 
-- [ ] **Step 3: Implement immutable records and the neutral differ**
+- [x] **Step 3: Implement immutable records and the neutral differ**
 
 Keep `Action`, `Observation`, and `View`. Replace the old flattened `Experience` with the nested record above. In `experience.py`, match item/carried observations by sensory token, match terrain by relative coordinate, compare every body channel by index, and emit generic `value`, `presence`, `relative_position`, `appearance`, `motion`, `action`, and `signal` changes. Never inspect an object outside the two supplied views.
 
@@ -67,13 +67,13 @@ def form_experience(before, occurrence, after, provenance):
     return Experience(before, occurrence, after, tuple(changes), provenance)
 ```
 
-- [ ] **Step 4: Run formation tests and verify GREEN**
+- [x] **Step 4: Run formation tests and verify GREEN**
 
 Run: `python -m pytest tests/test_relational_experience.py -q`
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit the formation boundary**
+- [x] **Step 5: Commit the formation boundary**
 
 ```bash
 git add core/cognition/records.py core/cognition/experience.py tests/test_relational_experience.py

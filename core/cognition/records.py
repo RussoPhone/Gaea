@@ -35,20 +35,56 @@ class View:
 
 
 @dataclass(frozen=True, slots=True)
-class Experience:
-    tick: int
-    body: tuple[float, float]
-    signature: tuple[int, ...]
-    action: str
-    delta: tuple[float, float] | None
-    success: bool | None
-    source: str = 'self'
+class Provenance:
+    origin: str
     actor: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PerceivedOccurrence:
+    action: str
+    target: Observation | None = None
+    actor: Observation | None = None
+    motion: tuple[int, int] = (0, 0)
     signal: int | None = None
-    visible_change: tuple[str, ...] = ()
-    location: tuple[int, int] = (0, 0)
-    target: int | None = None
-    context: tuple[tuple[int, ...], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PerceivedChange:
+    subject: tuple
+    attribute: str
+    before: object
+    after: object
+
+
+@dataclass(frozen=True, slots=True)
+class Experience:
+    before: View
+    occurrence: PerceivedOccurrence
+    after: View
+    changes: tuple[PerceivedChange, ...]
+    provenance: Provenance
+
+    @property
+    def tick(self):
+        return self.after.tick
+
+    @property
+    def action(self):
+        return self.occurrence.action
+
+    @property
+    def source(self):
+        return self.provenance.origin
+
+    @property
+    def actor(self):
+        return self.provenance.actor
+
+    @property
+    def target(self):
+        target = self.occurrence.target
+        return target.token if target is not None else None
 
 
 def local_signal(view: View):
