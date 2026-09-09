@@ -91,7 +91,7 @@ git commit -m "refactor: derive experiences from perceived moments"
 - Produces: immutable canonical `Condition`, `Antecedent`, and `Transition` values; mutable `RelationFamily` and `TransitionBranch`; immutable `RecallMatch`.
 - Produces: `RelationalMemory.record(experience: Experience)`, `RelationalMemory.recall(view: View, occurrence: PerceivedOccurrence) -> tuple[RecallMatch, ...]`, and `RelationalMemory.snapshot(tick: int) -> dict`.
 
-- [ ] **Step 1: Write failing relation tests**
+- [x] **Step 1: Write failing relation tests**
 
 Test one occurrence creating at least one family and branch, identical antecedents strengthening the same branch, incompatible transitions producing two branches, source-only differences sharing families and equal strength, different sensory tokens sharing canonical keys, partial recall returning matches without merging families, and bounded decay removing branches explicitly.
 
@@ -108,13 +108,13 @@ assert len(family.branches) == 2
 assert {branch.evidence_count for branch in family.branches.values()} == {1, 2}
 ```
 
-- [ ] **Step 2: Run relation tests and verify RED**
+- [x] **Step 2: Run relation tests and verify RED**
 
 Run: `python -m pytest tests/test_relational_memory.py -q`
 
 Expected: tests fail because family, branch, projection, and recall APIs are missing.
 
-- [ ] **Step 3: Implement canonical event-centred projections**
+- [x] **Step 3: Implement canonical event-centred projections**
 
 Canonical observation patterns exclude `token` and `action_target`. Build condition atoms for internal channel bins, perceived target, perceived actor, and signal. Generate every combination from arity zero through three with deterministic ordering. The antecedent always includes the occurrence operation and target pattern; provenance is never an input.
 
@@ -128,17 +128,17 @@ def antecedents(view, occurrence, max_arity=3):
 
 Canonicalize the complete tuple of perceived changes into a transition. Quantize numeric differences with one neutral resolution while retaining raw changes in evidence. An exact transition key selects a branch; a different key creates a sibling branch.
 
-- [ ] **Step 4: Implement bounded storage, decay, and structural recall**
+- [x] **Step 4: Implement bounded storage, decay, and structural recall**
 
 Count capacity in families. Increment branch strength by exactly `1.0` for every evidence regardless of origin. Keep up to four raw experiences per branch. Decay all branch strengths with the configured half-life. Evict by `(strength, last_tick, id)` and count removed families/branches as forgotten. Recall compares antecedent condition sets, exposes matched/missing/divergent atoms, and ranks by exactness, structural coverage, strength, and recency without consulting provenance.
 
-- [ ] **Step 5: Run relation tests and verify GREEN**
+- [x] **Step 5: Run relation tests and verify GREEN**
 
 Run: `python -m pytest tests/test_relational_memory.py -q`
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit relational storage**
+- [x] **Step 6: Commit relational storage**
 
 ```bash
 git add core/cognition/memory.py tests/test_relational_memory.py
