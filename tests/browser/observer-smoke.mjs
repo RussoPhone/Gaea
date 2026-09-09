@@ -88,6 +88,8 @@ try {
 
   paused=await frame();
   const agent=paused.agents.find(a=>a.x<bootstrap.width/2) || paused.agents[0];
+  const occupied=new Set([...paused.agents,...paused.objects].map(item=>`${item.x},${item.y}`));
+  const emptyTerrain=bootstrap.terrain.find(item=>!occupied.has(`${item.x},${item.y}`));
   let camera=await page.evaluate(async({w,h})=>{
     const {fitCamera}=await import('/camera.mjs');
     const c=document.querySelector('canvas');return fitCamera(w,h,c.clientWidth,c.clientHeight,16);
@@ -103,7 +105,7 @@ try {
       box.y+camera.offsetY+(my+.5)*camera.cell/3);
   };
   const title=()=>page.locator('#inspector [data-title]').innerText();
-  await clickCell(agent.x,agent.y);
+  await clickCell(emptyTerrain.x,emptyTerrain.y);
   await page.waitForFunction(()=>document.querySelector('#inspector [data-title]').textContent==='grass');
   await clickAgent(agent);
   await page.waitForFunction(id=>document.querySelector('#inspector [data-title]').textContent===`gaiano #${id}`,agent.id);
@@ -117,7 +119,7 @@ try {
   ]);
   const memory=(await memoryResponse.json()).detail;
   await page.waitForFunction(()=>document.querySelector('#history-content .reading-count'));
-  assert.equal(await page.locator('#history-content .history-list > li').count(),memory.relations.length);
+  assert.equal(await page.locator('#history-content > .history-list > li').count(),memory.families.length);
   assert.equal((await frame()).tick,paused.tick,'space on a tab must not run the simulation');
   const memoryRequests=requests.filter(p=>p.endsWith('/memory')).length;
   await page.locator('#history-content summary').first().click();
@@ -133,7 +135,7 @@ try {
   await page.route('**/agent/*/memory',route=>route.fulfill({status:503,json:{error:'memory unavailable'}}));
   await page.locator('#refresh-inspection').click();
   await page.waitForFunction(()=>document.querySelector('#history-status').textContent.includes('memory unavailable'));
-  assert.equal(await page.locator('#history-content .history-list > li').count(),memory.relations.length);
+  assert.equal(await page.locator('#history-content > .history-list > li').count(),memory.families.length);
   await page.unroute('**/agent/*/memory');
   await page.locator('#refresh-inspection').click();
   await page.waitForFunction(()=>document.querySelector('#history-status').textContent==='');
