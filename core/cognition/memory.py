@@ -1,6 +1,6 @@
 """Bounded families of perceptual relations with explicit competing branches."""
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from itertools import combinations
 import math
 
@@ -268,11 +268,52 @@ class RelationalMemory:
         ))
 
     def snapshot(self, tick):
-        """Representation migrates to the detached shape in the final task."""
+        # Evidence experiences are shared by reference across many branches
+        # (a single perceived experience projects into every antecedent it
+        # satisfies). Cache each experience's converted form by identity so
+        # asdict()'s recursive traversal runs once per unique experience
+        # instead of once per branch that references it.
+        experience_cache = {}
+
+        def converted_experience(experience):
+            key = id(experience)
+            cached = experience_cache.get(key)
+            if cached is None:
+                cached = asdict(experience)
+                experience_cache[key] = cached
+            return cached
+
+        def branch_row(branch, family_strength):
+            return {
+                'id': branch.id,
+                'transition': asdict(branch.transition),
+                'strength': branch.strength,
+                'evidence_count': branch.evidence_count,
+                'provenance': dict(branch.provenance),
+                'evidence': [converted_experience(experience) for experience in branch.evidence],
+                'last_tick': branch.last_tick,
+                'support': branch.strength / family_strength if family_strength else 0.0,
+                'age': tick - branch.last_tick,
+            }
+
+        families = []
+        for family in self.families.values():
+            branches = [branch_row(branch, family.strength) for branch in family.branches.values()]
+            families.append({
+                'id': family.id,
+                'antecedent': asdict(family.antecedent),
+                'strength': family.strength,
+                'competition': len(branches) > 1,
+                'branches': sorted(branches, key=lambda branch: (-branch['strength'], branch['id'])),
+                'last_tick': family.last_tick,
+                'age': tick - family.last_tick,
+                'active': family.active,
+            })
         return {
-            'families': tuple(self.families.values()),
-            'experiences': tuple(self.experiences),
+            'families': sorted(families, key=lambda family: (
+                not family['active'], -family['strength'], family['id']
+            )),
+            'experiences': [converted_experience(experience) for experience in self.experiences],
             'forgotten': self.forgotten,
             'forgottenBranches': self.forgotten_branches,
-            'tick': tick,
         }
