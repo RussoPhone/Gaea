@@ -214,25 +214,25 @@ git commit -m "refactor: unify perceived experience formation"
 - Produces: detached JSON with `families`, nested `branches`, structural antecedents, transitions, evidence counts/strength/support, provenance summaries, and recent experiences.
 - Preserves: on-demand read-only endpoints and no memory data in ordinary world frames.
 
-- [ ] **Step 1: Write failing inspection tests**
+- [x] **Step 1: Write failing inspection tests**
 
 Assert that inspection exposes competing branches separately, raw before/after moments and provenance, never exposes a merged `delta` or `success`, and remains detached/read-only. Update the JavaScript fixture to assert a family node connects to branch nodes and branch nodes connect to evidence nodes.
 
-- [ ] **Step 2: Run inspection tests and verify RED**
+- [x] **Step 2: Run inspection tests and verify RED**
 
 Run: `python -m pytest tests/test_agent_inspection.py -q && node --test tests/js/foundation.test.mjs`
 
 Expected: failures identify the old flat relation/experience representation.
 
-- [ ] **Step 3: Implement detached family/branch inspection and UI formatting**
+- [x] **Step 3: Implement detached family/branch inspection and UI formatting**
 
 Serialize dataclasses without consulting `simulation.perceive`, `snapshot`, physical objects, or functional kinds. Update the memory graph and history panel vocabulary to `família`, `ramo`, `evidências`, `força`, and `competição`; display origin only inside evidence provenance. Do not label a transition as effect, benefit, harm, success, or failure.
 
-- [ ] **Step 4: Update project documentation**
+- [x] **Step 4: Update project documentation**
 
 Replace the README description of EMA consequence averaging and source-dependent social confidence with the perception-only two-moment pipeline, exact projected families, explicit competing branches, neutral recall, and decision-only interpretation. Preserve the documented physical/cognitive boundary and scope limits.
 
-- [ ] **Step 5: Run focused and full verification**
+- [x] **Step 5: Run focused and full verification**
 
 Run:
 
@@ -249,7 +249,7 @@ git diff --check
 
 Expected: every command exits zero; the Python suite reports no failures; Node reports no failed tests; compile/check commands are silent.
 
-- [ ] **Step 6: Commit representation and documentation**
+- [x] **Step 6: Commit representation and documentation**
 
 ```bash
 git add core/representation/inspection.py core/interface/static/memory-graph.mjs core/interface/static/ui/inspection-format.mjs core/interface/static/ui/agent-history.mjs tests/test_agent_inspection.py tests/js/foundation.test.mjs ReadME.md
