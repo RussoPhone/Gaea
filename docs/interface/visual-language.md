@@ -30,11 +30,11 @@ São seções de inspeção de um **agente**, não novas camadas do mundo. Os en
 
 `core/representation/inspection.py` projeta apenas registros armazenados. Não chama `PopulationSimulation.snapshot`, `perceive`, métodos ativos da memória ou RNG. O lock do controlador protege a leitura, e coleções devolvidas são destacadas do estado interno. A cognição não importa essa camada.
 
-Memória apresenta assinatura, ação, confiança, força, contradições, contexto corporal e evidências preservadas. A confiança é um valor interno da memória, não uma probabilidade validada de sucesso. Assinaturas permanecem numéricas: a interface não consulta a verdade física para renomeá-las como food, water, perigo etc. Efeitos desconhecidos não são apresentados como zero; tentativas não efetivadas não são descritas como ausência de custos físicos.
+Memória apresenta famílias de antecedentes perceptivos, ramos de transição, força, suporte relativo, competição e evidências preservadas. Ramos incompatíveis permanecem separados; suporte relativo descreve somente a distribuição das evidências guardadas. A interface não consulta a verdade física para renomear aparências ou mudanças. Ausência posterior e transição vazia são mostradas literalmente, sem inferir resultado físico ou causa.
 
 Registro possui dois recortes distintos:
 
-- **Experiências:** a fila limitada do gaiano, distinguindo experiência própria e ação observada. Resultados alheios não observados permanecem desconhecidos.
+- **Experiências:** a fila limitada do gaiano, com momentos anterior e posterior, mudanças derivadas e origem mantida apenas como proveniência.
 - **Eventos físicos:** participação explícita como ator, alvo ou descendente nos eventos globais ainda retidos. Proximidade espacial não é usada para atribuir eventos ao indivíduo.
 
 O painel mostra o tick da leitura. Não atualiza automaticamente enquanto se lê, mesmo que a simulação continue executando. O botão atualizar solicita novos dados; falhas preservam a última leitura válida. Trocar seleção, seção ou revisão invalida respostas pendentes.
