@@ -222,7 +222,7 @@ class RelationalMemory:
         elapsed = max(0, tick - self._decayed_at)
         if not elapsed:
             return
-        factor = math.exp2(-elapsed / self.half_life)
+        factor = 2.0 ** (-elapsed / self.half_life)
         for antecedent, family in list(self.families.items()):
             for transition, branch in list(family.branches.items()):
                 branch.strength *= factor
