@@ -1,4 +1,5 @@
 import copy
+import json
 import pickle
 
 from core.simulation.population import PopulationSimulation, PopulationConfig, Action
@@ -30,6 +31,16 @@ def test_snapshot_is_detached_from_live_memory_and_decision():
     snapshot['selected']['decision']['alternatives'].clear()
     snapshot['events'][0]['action'] = 'corrupted'
     assert s.snapshot(uid) == original
+
+
+def test_selected_snapshot_remains_json_serializable():
+    simulation = small()
+    simulation.step()
+    uid = next(iter(simulation.agents))
+
+    encoded = json.dumps(simulation.snapshot(uid), allow_nan=False)
+
+    assert 'families' in encoded
 
 
 def test_reproduction_costs_body_reserves_and_never_copies_memory():
