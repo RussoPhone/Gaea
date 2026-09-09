@@ -2,39 +2,49 @@ function list(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function signatureLabel(signature) {
-  const values = list(signature);
-  return values.length ? values.join("·") : "∅";
-}
-
 export function experienceId(item) {
-  const signature = list(item?.signature).join(",");
-  return `experience:${item?.tick}:${item?.source}:${item?.actor}:${item?.action}:${item?.target ?? "-"}:${signature}`;
+  const origin = item?.provenance?.origin;
+  const actor = item?.provenance?.actor;
+  const changes = JSON.stringify(list(item?.changes));
+  return `experience:${item?.tick}:${origin}:${actor}:${item?.action}:${item?.target ?? "-"}:${changes}`;
 }
 
 export function buildMemoryGraph(memory) {
-  const relations = list(memory?.relations)
+  const families = list(memory?.families)
     .slice()
-    .sort((left, right) => Number(right.weight || 0) - Number(left.weight || 0));
+    .sort((left, right) => Number(right.strength || 0) - Number(left.strength || 0));
   const experiences = new Map();
   for (const experience of list(memory?.experiences)) {
     experiences.set(experienceId(experience), experience);
   }
-  for (const relation of relations) {
-    for (const evidence of list(relation.evidence)) {
-      experiences.set(experienceId(evidence), evidence);
+  for (const family of families) {
+    for (const branch of list(family.branches)) {
+      for (const evidence of list(branch.evidence)) {
+        experiences.set(experienceId(evidence), evidence);
+      }
     }
   }
 
-  const nodes = relations.map((relation) => ({
-    id: `relation:${relation.id}`,
-    kind: "relation",
-    label: `assinatura ${signatureLabel(relation.signature)} · ${relation.action || "sem ação"}`,
-    weight: Number(relation.weight || 0),
-    confidence: Number(relation.confidence || 0),
-    contradictions: Number(relation.contradictions || 0),
-    data: relation,
+  const nodes = families.map((family) => ({
+    id: `family:${family.id}`,
+    kind: "family",
+    label: `família ${family.id} · ${family.antecedent?.operation || "sem ocorrência"}`,
+    weight: Number(family.strength || 0),
+    competition: Boolean(family.competition),
+    data: family,
   }));
+  for (const family of families) {
+    for (const branch of list(family.branches)) {
+      nodes.push({
+        id: `branch:${branch.id}`,
+        kind: "branch",
+        label: `ramo ${branch.id} · ${Number(branch.evidenceCount || 0)} evidências`,
+        weight: Number(branch.strength || 0),
+        support: Number(branch.support || 0),
+        data: branch,
+      });
+    }
+  }
   const orderedExperiences = [...experiences.entries()]
     .sort(([, left], [, right]) => Number(right.tick || 0) - Number(left.tick || 0));
   for (const [id, experience] of orderedExperiences) {
@@ -48,10 +58,13 @@ export function buildMemoryGraph(memory) {
 
   const known = new Set(experiences.keys());
   const edges = [];
-  for (const relation of relations) {
-    for (const evidence of list(relation.evidence)) {
-      const target = experienceId(evidence);
-      if (known.has(target)) edges.push({ from: `relation:${relation.id}`, to: target });
+  for (const family of families) {
+    for (const branch of list(family.branches)) {
+      edges.push({ from: `family:${family.id}`, to: `branch:${branch.id}` });
+      for (const evidence of list(branch.evidence)) {
+        const target = experienceId(evidence);
+        if (known.has(target)) edges.push({ from: `branch:${branch.id}`, to: target });
+      }
     }
   }
   return { nodes, edges };
@@ -87,10 +100,12 @@ function placeInBands(nodes, center, innerRadius, outerRadius) {
 export function layoutMemoryGraph(graph, width, height) {
   const center = { x: width / 2, y: height / 2 };
   const radius = Math.max(40, Math.min(width, height) * 0.28);
-  const relations = list(graph?.nodes).filter((node) => node.kind === "relation");
+  const families = list(graph?.nodes).filter((node) => node.kind === "family");
+  const branches = list(graph?.nodes).filter((node) => node.kind === "branch");
   const experiences = list(graph?.nodes).filter((node) => node.kind === "experience");
   return [
-    ...placeInBands(relations, center, radius * 0.18, radius * 0.55),
+    ...placeInBands(families, center, radius * 0.12, radius * 0.34),
+    ...placeInBands(branches, center, radius * 0.4, radius * 0.64),
     ...placeInBands(experiences, center, radius * 0.64, radius),
   ];
 }
@@ -138,17 +153,18 @@ export class MemoryGraphRenderer {
 
     const hits = [];
     for (const node of nodes) {
-      const relation = node.kind === "relation";
-      const radius = relation ? Math.max(7, Math.min(18, 7 + Math.sqrt(node.weight || 0) * 2.4)) : 4.5;
+      const family = node.kind === "family";
+      const branch = node.kind === "branch";
+      const radius = family ? Math.max(7, Math.min(18, 7 + Math.sqrt(node.weight || 0) * 2.4)) : branch ? 6 : 4.5;
       const selected = node.id === selectedId;
       ctx.save();
-      ctx.globalAlpha = relation ? Math.max(0.32, Math.min(1, Number(node.confidence || 0) + 0.3)) : 0.72;
+      ctx.globalAlpha = family ? 0.9 : branch ? Math.max(0.35, Math.min(1, node.support + 0.3)) : 0.72;
       ctx.translate(node.x, node.y);
-      ctx.fillStyle = relation ? "#b5c77f" : "#78a39a";
+      ctx.fillStyle = family ? "#b5c77f" : branch ? "#c29b69" : "#78a39a";
       ctx.strokeStyle = selected ? "#fff0a6" : "rgba(235, 225, 184, .54)";
       ctx.lineWidth = selected ? 3 : 1;
       ctx.beginPath();
-      if (relation) {
+      if (family) {
         ctx.moveTo(0, -radius);
         ctx.lineTo(radius, 0);
         ctx.lineTo(0, radius);
@@ -159,7 +175,7 @@ export class MemoryGraphRenderer {
       }
       ctx.fill();
       ctx.stroke();
-      if (relation && node.contradictions > 0) {
+      if (family && node.competition) {
         ctx.strokeStyle = "#bd7361";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -167,7 +183,7 @@ export class MemoryGraphRenderer {
         ctx.stroke();
       }
       ctx.restore();
-      if (selected || relation && nodes.length < 45) {
+      if (selected || (family || branch) && nodes.length < 45) {
         ctx.fillStyle = selected ? "#f3ebc8" : "rgba(220, 213, 176, .68)";
         ctx.font = `${selected ? 650 : 500} 10px ui-monospace, monospace`;
         ctx.textAlign = "center";

@@ -77,43 +77,36 @@ test("connection status updates without a legacy connection wrapper", () => {
   assert.equal(label.textContent, "observando");
 });
 
-test("memory graph joins relations to their evidence without semantic labels", () => {
+test("memory graph keeps family branches and evidence structurally separate", () => {
   const graph = buildMemoryGraph({
-    relations: [{
+    families: [{
       id: 7,
-      signature: [2, 4, 6],
-      action: "ingest",
-      weight: 0.8,
-      confidence: 0.5,
-      contradictions: 2,
-      evidence: [{
-        tick: 9,
-        source: "self",
-        actor: 1,
-        target: 4,
-        action: "ingest",
-        signature: [2, 4, 6],
-      }],
+      antecedent: {operation:"ingest",conditions:[{kind:"target",value:[2,4,6]}]},
+      strength: 2,
+      competition: true,
+      branches: [{id:11,strength:1,support:0.5,evidence:[{
+        tick:9,action:"ingest",target:4,provenance:{origin:"self",actor:1},changes:[],
+      }]}],
     }],
     experiences: [{
       tick: 9,
-      source: "self",
-      actor: 1,
       target: 4,
       action: "ingest",
-      signature: [2, 4, 6],
+      provenance: {origin:"self",actor:1},
+      changes: [],
     }],
   });
 
   assert.deepEqual(graph.nodes.map(({ id, kind }) => ({ id, kind })), [
-    { id: "relation:7", kind: "relation" },
-    { id: "experience:9:self:1:ingest:4:2,4,6", kind: "experience" },
+    { id: "family:7", kind: "family" },
+    { id: "branch:11", kind: "branch" },
+    { id: "experience:9:self:1:ingest:4:[]", kind: "experience" },
   ]);
-  assert.deepEqual(graph.edges, [{
-    from: "relation:7",
-    to: "experience:9:self:1:ingest:4:2,4,6",
-  }]);
-  assert.equal(graph.nodes[0].label, "assinatura 2·4·6 · ingest");
+  assert.deepEqual(graph.edges, [
+    {from:"family:7",to:"branch:11"},
+    {from:"branch:11",to:"experience:9:self:1:ingest:4:[]"},
+  ]);
+  assert.equal(graph.nodes[0].label, "família 7 · ingest");
 });
 
 test("world frame culls records and keeps screen-space hits", () => {
@@ -163,8 +156,9 @@ test("world labels name physical kinds instead of appearance signatures", () => 
 test("memory layout is deterministic and keeps nodes inside its viewport", () => {
   const graph = {
     nodes: [
-      { id: "r1", kind: "relation" },
-      { id: "r2", kind: "relation" },
+      { id: "f1", kind: "family" },
+      { id: "f2", kind: "family" },
+      { id: "b1", kind: "branch" },
       { id: "e1", kind: "experience" },
       { id: "e2", kind: "experience" },
       { id: "e3", kind: "experience" },
@@ -177,8 +171,10 @@ test("memory layout is deterministic and keeps nodes inside its viewport", () =>
   assert.deepEqual(layout, layoutMemoryGraph(graph, 800, 600));
   assert.equal(layout.every(({ x, y }) => x >= 0 && x <= 800 && y >= 0 && y <= 600), true);
   const distance = ({ x, y }) => Math.hypot(x - 400, y - 300);
-  const relations = layout.filter((node) => node.kind === "relation");
+  const families = layout.filter((node) => node.kind === "family");
+  const branches = layout.filter((node) => node.kind === "branch");
   const experiences = layout.filter((node) => node.kind === "experience");
-  assert.equal(relations.every((node) => distance(node) < 168), true);
+  assert.equal(families.every((node) => distance(node) < 100), true);
+  assert.equal(branches.every((node) => distance(node) < 120), true);
   assert.equal(experiences.every((node) => Math.abs(distance(node) - 168) < 0.000001), true);
 });
