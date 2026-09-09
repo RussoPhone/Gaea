@@ -11,7 +11,7 @@ from core.simulation.experiments import run_experiment, benchmark
 
 
 def parser():
-    root = argparse.ArgumentParser(description='Gaea — laboratório populacional')
+    root = argparse.ArgumentParser(description='Gaea — mundo experimental')
     modes = root.add_subparsers(dest='mode', required=True)
     for name in ('ui', 'run', 'batch'):
         sub = modes.add_parser(name)
