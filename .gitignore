@@ -20,3 +20,6 @@ Locale/
 # Resultados experimentais locais
 runs/
 *.gaea
+
+# Worktrees locais de desenvolvimento
+.worktrees/
