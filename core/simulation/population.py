@@ -10,7 +10,8 @@ from core.ambient.tile import STONE
 from core.ambient.objects import PhysicalObject
 from core.ambient.physical_space import PhysicalSpace, Shape
 from core.being.organism import Organism
-from core.cognition.records import Action, Observation, View, Experience, local_signal
+from core.cognition.records import Action, Observation, View, PerceivedOccurrence, Provenance
+from core.cognition.experience import form_experience, occurrence_from_action
 from core.cognition.memory import RelationalMemory
 from core.cognition.decision import Decision
 
@@ -436,73 +437,69 @@ class PopulationSimulation:
                 a.memory.decay(self.tick)
             chosen[a.uid] = actions[a.uid] if actions and a.uid in actions else a.decision_system.choose(a.view, a.memory)
         # All decisions use pre-action samples; shuffled resolution avoids permanent priority.
-        visible_actions = []
         for a in order:
             if a.uid not in chosen:
                 continue
             view, action = views[a.uid], chosen[a.uid]
-            item = next((o for o in view.items if o.token == action.target), None)
-            if view.carried and action.target == view.carried.token:
-                item = view.carried
             target_position = self._observable_position(action.target)
             success = self._apply(a, action)
             a.last_action = action.verb
             a.last_target = action.target
             delta = (a.body.hunger-view.body[0], a.body.thirst-view.body[1])
-            change = ('changed',) if success and action.verb in ('move', 'pick', 'drop', 'place', 'give', 'signal') else ()
-            if success and action.verb == 'ingest':
-                change = ('vanished',) if action.target not in self.objects else ('changed',)
-            signature = item.appearance if item else ()
-            if self.config.learning:
-                a.memory.record(Experience(self.tick, view.body, signature, action.verb, delta, success,
-                    actor=a.uid, signal=local_signal(view), visible_change=change,
-                    location=a.odometry, target=action.target,
-                    context=tuple(o.appearance for o in (*view.terrain[:4], *view.items[:8]))))
             self.action_counts[action.verb] += 1
             if success and action.verb in ('ingest', 'pick', 'drop', 'place', 'give', 'signal'):
                 self._event(a.uid, action.verb, target=action.target, delta=delta,
                             position=(a.x, a.y), target_position=target_position)
-            visible_actions.append(a.uid)
-        if self.config.observe and self.config.learning:
-            # Invert the already local visibility lists, avoiding N² observer/action scans.
-            observers = {}
-            for observer_id, view in views.items():
-                for item in view.items:
-                    if item.token in views:
-                        observers.setdefault(item.token, []).append(observer_id)
-            after_views = {}
-            for actor in visible_actions:
-                for observer_id in observers.get(actor, ()):
+        after_views = {
+            uid: self.perceive(agent)
+            for uid, agent in self.agents.items()
+            if uid in views
+        }
+        for uid, after_view in after_views.items():
+            self.agents[uid].view = after_view
+        if self.config.learning:
+            for actor_id, action in chosen.items():
+                actor = self.agents.get(actor_id)
+                before = views.get(actor_id)
+                after = after_views.get(actor_id)
+                if actor is None or before is None or after is None:
+                    continue
+                experience = form_experience(
+                    before,
+                    occurrence_from_action(before, action),
+                    after,
+                    Provenance('self', actor_id),
+                )
+                if experience is not None:
+                    actor.memory.record(experience)
+            if self.config.observe:
+                for observer_id, after in after_views.items():
                     observer = self.agents.get(observer_id)
-                    if observer is None:
+                    before = views.get(observer_id)
+                    if observer is None or before is None:
                         continue
-                    view = views[observer_id]
-                    if observer_id not in after_views:
-                        after_views[observer_id] = self.perceive(observer)
-                    after_view = after_views[observer_id]
-                    visible_actor = next((o for o in after_view.items if o.token == actor), None)
-                    if visible_actor is None:
-                        continue
-                    target_id = visible_actor.action_target
-                    target = next((o for o in view.items if o.token == target_id), None)
-                    if target is None:
-                        target = next((o for o in after_view.items if o.token == target_id), None)
-                    # Only compare observable records. Physical success and stock quantity
-                    # are NOT available here; an unchanged-looking attempt stays uncertain.
-                    change = ()
-                    if target:
-                        after_target = next((o for o in after_view.items if o.token == target.token), None)
-                        if after_target is not None and after_target != target:
-                            change = ('visible_change',)
-                        elif after_target is None:
-                            change = ('out_of_view',)
-                    elif visible_actor.signal is not None:
-                        change = ('signal',)
-                    observer.memory.record(Experience(self.tick, view.body,
-                        target.appearance if target else (), visible_actor.action, None, None, source='observed', actor=actor,
-                        signal=visible_actor.signal if visible_actor.action == 'signal' else local_signal(view),
-                        visible_change=change, location=(visible_actor.dx, visible_actor.dy),
-                        target=target_id, context=tuple(o.appearance for o in view.items[:8])))
+                    for perceived_actor in after.items:
+                        if perceived_actor.token not in chosen or perceived_actor.action is None:
+                            continue
+                        target_id = perceived_actor.action_target
+                        target = next((item for item in before.items if item.token == target_id), None)
+                        if target is None:
+                            target = next((item for item in after.items if item.token == target_id), None)
+                        occurrence = PerceivedOccurrence(
+                            perceived_actor.action,
+                            target=target,
+                            actor=perceived_actor,
+                            motion=perceived_actor.motion,
+                            signal=perceived_actor.signal if perceived_actor.action == 'signal' else None,
+                        )
+                        experience = form_experience(
+                            before,
+                            occurrence,
+                            after,
+                            Provenance('observed', perceived_actor.token),
+                        )
+                        if experience is not None:
+                            observer.memory.record(experience)
         self._reproduce()
 
     def metrics(self):

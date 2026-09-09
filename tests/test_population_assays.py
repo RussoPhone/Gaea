@@ -36,7 +36,13 @@ def test_real_ingestion_is_learned_and_effect_swap_reverses_behavior():
             a.body.hunger = 70.
             s.step({a.uid: Action('ingest', obj.uid)})
     assert selections(s, a, x, y).count(y.uid) >= 80
-    assert any(e.delta == (-30., 0.) and e.signature == y.appearance for e in a.memory.experiences)
+    assert any(
+        e.occurrence.target is not None
+        and e.occurrence.target.appearance == y.appearance
+        and any(change.subject == ('internal', 0) and change.before-change.after == 30
+                for change in e.changes)
+        for e in a.memory.experiences
+    )
 
 
 def trial_latency(seed, observation):
@@ -49,7 +55,7 @@ def trial_latency(seed, observation):
         demonstrator.body.hunger = 70.
         s.step({a.uid: Action('wait'), demonstrator.uid: Action('ingest', y.uid)})
     observed = [e for e in a.memory.experiences if e.source == 'observed']
-    assert all(e.delta is None for e in observed)
+    assert all(not any(change.subject[0] == 'internal' for change in e.changes) for e in observed)
     # Same motor choices and physical feedback for exposed and unexposed agents.
     for trial in range(1, 25):
         a.body.hunger = 70.

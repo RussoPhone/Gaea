@@ -86,4 +86,4 @@ def test_newborn_memory_does_not_decay_since_the_start_of_the_world():
     s.step({a.uid: Action('wait')})
     assert a.memory.forgotten == 0
     assert next(iter(a.memory.relations.values())).id == relation.id
-    assert next(iter(a.memory.relations.values())).weight > 20
+    assert next(iter(a.memory.relations.values())).strength > 20

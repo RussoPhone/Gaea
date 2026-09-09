@@ -160,17 +160,17 @@ git commit -m "feat: preserve competing perceptual relations"
 - Produces: `Decision.prediction(view, memory, occurrence) -> tuple[float, list[int]]`; keeps `Decision.choose(view, memory, actions=None) -> Action`.
 - Preserves: `PopulationSimulation.step(actions=None)`, deterministic action resolution, reproduction, events, snapshots, and checkpoint pickling.
 
-- [ ] **Step 1: Write failing integration tests**
+- [x] **Step 1: Write failing integration tests**
 
 Replace tests that manually construct flattened experiences with before/after fixtures. Add a runtime boundary test that supplies objects whose effect/kind/quantity attributes raise if cognition touches them, then demonstrates memory formation through `View`s. Assert own and observed experiences use the same record class and families; no source-dependent weight cap remains; and incompatible physical outcomes become competing branches.
 
-- [ ] **Step 2: Run integration tests and verify RED**
+- [x] **Step 2: Run integration tests and verify RED**
 
 Run: `python -m pytest tests/test_population_learning.py tests/test_population_assays.py tests/test_population_runtime.py tests/test_perception_memory_boundary.py -q`
 
 Expected: failures identify old `Experience(...)`, `memory.related(...)`, `success`, `delta`, `signature`, and source-weight behavior.
 
-- [ ] **Step 3: Adapt decision to recalled branches**
+- [x] **Step 3: Adapt decision to recalled branches**
 
 Build a `PerceivedOccurrence` for each candidate action. Use the most specific exact recalled families, preserving every branch. Decision may interpret internal `value` changes against the current body vector and use an external-change-only branch as the existing weak trial prior. Branches remain separate in memory; any weighted aggregation is local to this decision call. Mark active family IDs for inspection.
 
@@ -181,17 +181,17 @@ specificity = max((len(match.family.antecedent.conditions) for match in exact), 
 usable = [match for match in exact if len(match.family.antecedent.conditions) == specificity]
 ```
 
-- [ ] **Step 4: Reorder the runtime into before/action/after formation**
+- [x] **Step 4: Reorder the runtime into before/action/after formation**
 
 Capture all pre-action views, choose and physically apply actions, then capture post-action views only through `perceive`. Form the actor's own occurrence without forwarding `_apply`'s Boolean. Form observed occurrences only from visible `Observation.action` and perceptible target records. Pass both through the same `form_experience` and `memory.record` calls; provenance differs only as metadata. Physical event logging may continue to use physical success outside cognition.
 
-- [ ] **Step 5: Run integration tests and verify GREEN**
+- [x] **Step 5: Run integration tests and verify GREEN**
 
 Run: `python -m pytest tests/test_population_learning.py tests/test_population_assays.py tests/test_population_runtime.py tests/test_perception_memory_boundary.py -q`
 
 Expected: all tests pass, including effect reversal and deterministic continuation.
 
-- [ ] **Step 6: Commit runtime integration**
+- [x] **Step 6: Commit runtime integration**
 
 ```bash
 git add core/cognition/decision.py core/simulation/population.py tests/test_population_learning.py tests/test_population_assays.py tests/test_population_runtime.py tests/test_perception_memory_boundary.py

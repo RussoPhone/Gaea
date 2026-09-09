@@ -1,7 +1,8 @@
-"""Behavioral assays: no semantics, real experience, reversal and social exposure."""
+"""Behavioral assays over perception-derived relational evidence."""
 import random
 
-from core.cognition.records import Action, Experience, Observation, View
+from core.cognition.experience import form_experience
+from core.cognition.records import Action, Observation, PerceivedOccurrence, Provenance, View
 from core.cognition.memory import RelationalMemory
 from core.cognition.decision import Decision
 
@@ -9,9 +10,11 @@ from core.cognition.decision import Decision
 X, Y = (17, 2, 6), (31, 5, 8)
 
 
-def view():
-    return View((70., 20.), (
-        Observation(1, X, 0, 0), Observation(2, Y, 0, 0)), (), 1)
+def view(body=(70.0, 20.0), signal=None):
+    items = [Observation(1, X, 0, 0), Observation(2, Y, 0, 0)]
+    if signal is not None:
+        items.append(Observation(99, (5, 5, 5), 0, 1, signal=signal))
+    return View(body, tuple(items), (), 1)
 
 
 def choice_counts(memory, seed=11):
@@ -23,70 +26,101 @@ def choice_counts(memory, seed=11):
     return counts
 
 
-def learn(memory, signature, delta, tick, source='self'):
-    memory.record(Experience(tick, (70., 20.), signature, 'ingest', delta,
-        True, source=source, actor=44 if source == 'observed' else 1,
-        visible_change=('vanished',), location=(0, 0)))
+def learn(memory, signature, delta, tick, source='self', signal=None):
+    token = 1 if signature == X else 2
+    before = view(signal=signal)
+    target = next(item for item in before.items if item.token == token)
+    after_body = tuple(value + change for value, change in zip(before.body, delta or (0.0, 0.0)))
+    after_items = tuple(item for item in before.items if item.token != token) if delta is None else before.items
+    after = View(after_body, after_items, (), tick + 1)
+    memory.record(form_experience(
+        View(before.body, before.items, before.terrain, tick),
+        PerceivedOccurrence('ingest', target=target),
+        after,
+        Provenance(source, 44 if source == 'observed' else 1),
+    ))
 
 
-def test_blank_agent_has_no_resource_preference():
+def test_blank_agent_has_no_pattern_preference():
     counts = choice_counts(RelationalMemory())
     assert 160 < counts[1] < 240
 
 
-def test_repeated_consequences_change_choices_and_reversal_is_relearned():
-    m = RelationalMemory()
-    for t in range(12):
-        learn(m, X, (-30., 0.), t)
-        learn(m, Y, (0., 0.), t)
-    assert choice_counts(m)[1] > 360
-    for t in range(12, 70):
-        learn(m, X, (0., 0.), t)
-        learn(m, Y, (-30., 0.), t)
-    assert choice_counts(m)[2] > 360
-    assert any(r.contradictions > 0 for r in m.relations.values())
+def test_repeated_transitions_change_choices_and_reversal_competes():
+    memory = RelationalMemory()
+    for tick in range(12):
+        learn(memory, X, (-30.0, 0.0), tick)
+        learn(memory, Y, (0.0, 0.0), tick)
+    assert choice_counts(memory)[1] > 360
+
+    for tick in range(12, 70):
+        learn(memory, X, (0.0, 0.0), tick)
+        learn(memory, Y, (-30.0, 0.0), tick)
+
+    assert choice_counts(memory)[2] > 360
+    assert any(len(family.branches) > 1 for family in memory.families.values())
 
 
-def test_observation_promotes_trials_without_inventing_internal_consequences():
+def test_observed_external_change_promotes_trials_without_internal_change():
     observed, blank = RelationalMemory(), RelationalMemory()
-    for t in range(6):
-        learn(observed, Y, None, t, source='observed')
+    for tick in range(6):
+        learn(observed, Y, None, tick, source='observed')
+
     assert choice_counts(observed)[2] > choice_counts(blank)[2] + 100
-    assert all(r.delta is None for r in observed.relations.values())
-    assert all(e.delta is None for e in observed.experiences)
+    assert all(
+        not any(change.subject[0] == 'internal' for change in evidence.changes)
+        for evidence in observed.experiences
+    )
 
 
 def test_memory_is_individual_bounded_decays_and_has_traceable_context():
-    a, b = RelationalMemory(capacity=8, experience_capacity=16), RelationalMemory()
-    for t in range(80):
-        learn(a, (t, 2, 1), (-20., 0.), t)
-    assert len(a.relations) <= 8 and len(a.experiences) <= 16
-    assert not b.relations and not b.experiences
-    assert a.forgotten > 0
-    r = next(iter(a.relations.values()))
-    assert r.body_context and r.evidence and r.action == 'ingest'
-    old = r.weight
-    a.decay(500)
-    assert not a.relations or next(iter(a.relations.values())).weight < old
+    first, second = RelationalMemory(capacity=8, experience_capacity=16), RelationalMemory()
+    for tick in range(80):
+        signature = (tick, 2, 1)
+        before = View((70.0, 20.0), (Observation(tick, signature, 0, 0),), (), tick)
+        after = View((50.0, 20.0), before.items, (), tick + 1)
+        first.record(form_experience(before, PerceivedOccurrence('touch', before.items[0]), after,
+                                     Provenance('self', 1)))
+
+    assert len(first.families) <= 8 and len(first.experiences) <= 16
+    assert not second.families and not second.experiences
+    assert first.forgotten > 0
+    family = next(iter(first.families.values()))
+    branch = next(iter(family.branches.values()))
+    assert family.antecedent and branch.evidence and branch.evidence_count
+    old = branch.strength
+    first.decay(500)
+    assert not first.families or next(iter(next(iter(first.families.values())).branches.values())).strength < old
 
 
-def test_context_keeps_signal_and_bodily_state_in_the_relation():
-    m = RelationalMemory()
-    for signal, body, delta in ((0, (80., 0.), (-30., 0.)), (1, (0., 80.), (0., -30.))):
-        m.record(Experience(1, body, X, 'touch', delta, True, signal=signal))
-    assert len(m.relations) == 2
-    assert {r.signal for r in m.relations.values()} == {0, 1}
+def test_perceived_signal_and_internal_state_condition_relations():
+    memory = RelationalMemory()
+    for signal, body, delta in ((0, (80.0, 0.0), (-30.0, 0.0)), (1, (0.0, 80.0), (0.0, -30.0))):
+        sensed = view(body, signal)
+        target = sensed.items[0]
+        after = View(tuple(value + change for value, change in zip(body, delta)), sensed.items, (), 2)
+        memory.record(form_experience(sensed, PerceivedOccurrence('touch', target=target), after,
+                                      Provenance('self', 1)))
+
+    signal_conditions = {
+        condition.value
+        for family in memory.families.values()
+        for condition in family.antecedent.conditions
+        if condition.kind == 'signal'
+    }
+    assert signal_conditions == {(0,), (1,)}
 
 
 def test_perceived_signal_can_condition_action_without_assigned_meaning():
-    m = RelationalMemory()
+    memory = RelationalMemory()
     for tick in range(20):
         for signal in (0, 1):
             for signature in (X, Y):
-                useful = (signature == X) == (signal == 0)
-                m.record(Experience(tick, (70., 20.), signature, 'ingest',
-                    (-30., 0.) if useful else (0., 0.), True, signal=signal))
+                matching = (signature == X) == (signal == 0)
+                learn(memory, signature, (-30.0, 0.0) if matching else (0.0, 0.0), tick, signal=signal)
+
     policy = Decision(random.Random(10), exploration=0)
     for signal, expected in ((0, 1), (1, 2)):
-        sensed = View((70., 20.), (*view().items, Observation(99, (5, 5, 5), 0, 1, signal=signal)), (), 1)
-        assert policy.choose(sensed, m, (Action('ingest', 1), Action('ingest', 2))).target == expected
+        assert policy.choose(
+            view(signal=signal), memory, (Action('ingest', 1), Action('ingest', 2))
+        ).target == expected
