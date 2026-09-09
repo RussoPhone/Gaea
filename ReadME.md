@@ -14,7 +14,7 @@ Na raiz do projeto:
 python -m core.main ui
 ```
 
-Abra **http://127.0.0.1:8765**. A execução começa pausada. O mundo top-down ocupa a janela em ASCII ligado ao estado físico: arraste para mover a câmera, use a roda para aproximar e clique em agentes, objetos ou terreno. Um inspector não modal mostra informações básicas e permite escolher entre todos os elementos da célula, inclusive vários objetos. Os controles inferiores permitem continuar, pausar, avançar um tick, definir de `0.1` a `100000` ticks/s e disparar uma rajada. O controle **colisão** mostra ou oculta a ocupação física sem modificar a simulação. O worker avança independentemente do polling da interface.
+Abra **http://127.0.0.1:8765** e escolha **Mundo**. A execução começa pausada. O mundo top-down ocupa a janela em ASCII ligado ao estado físico: arraste para mover a câmera, use a roda para aproximar e clique em agentes, objetos ou terreno. Um inspector não modal mostra informações básicas e permite escolher entre todos os elementos da célula, inclusive vários objetos. Os controles inferiores permitem continuar, pausar, avançar um tick, definir de `0.1` a `100000` ticks/s e disparar uma rajada. O controle **colisão** mostra ou oculta a ocupação física sem modificar a simulação. O worker avança independentemente do polling da interface.
 
 Atalhos: `Espaço` continua ou pausa; `.` avança um tick; `F` acompanha o agente selecionado; `0` enquadra o mundo; setas movem a câmera; `Esc` fecha a inspeção.
 
@@ -96,6 +96,8 @@ Os ensaios cognitivos usam arenas controladas: alguns restringem o repertório a
 O benchmark mantém todos os agentes vivos com metabolismo zero e reprodução desligada, em densidade semelhante. Há 30 ticks de aquecimento antes da medição. Ele mede custo de populações ativas, não velocidade de um mundo extinto. Populações com memória madura e alta densidade de interações podem custar mais.
 
 Um primeiro ensaio populacional revisado está documentado em `docs/experiments/2026-09-05-first-population.md`.
+
+Para registrar outro experimento ou subexperimento no launcher, veja [registry de experimentos](docs/experiments/registry.md).
 
 Limitações atuais: memória de assinaturas discretas, previsão de curto horizonte, observação de ações isoladas em vez de aprendizagem explícita de sequências, sem abstração de conceitos por similaridade, sem planejamento espacial persistente, crafting complexo ou detecção externa de cultura. Sobrevivência e gerações sucessivas são condições experimentais, não evidência de civilização. A emergência de comunicação, organização e inteligência permanece uma hipótese a investigar.
 

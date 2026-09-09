@@ -4,8 +4,10 @@ from dataclasses import replace
 import json
 from pathlib import Path
 
-from core.simulation.population import PopulationConfig, PopulationSimulation
-from core.simulation.experiments import run_experiment, benchmark, load_checkpoint
+from core.experiments.catalog import default_registry
+from core.interface.launcher import select_experiment
+from core.simulation.population import PopulationConfig
+from core.simulation.experiments import run_experiment, benchmark
 
 
 def parser():
@@ -52,10 +54,13 @@ def main(argv=None):
         config = PopulationConfig(**{name: getattr(args, name) for name in names},
             reproduction=not args.no_reproduction, observe=not args.no_observation, learning=not args.no_learning)
         if args.mode == 'ui':
-            from core.interface.server import serve
-            s = load_checkpoint(args.resume) if args.resume else PopulationSimulation(config)
-            print(f'Gaea: http://127.0.0.1:{args.port} — inicia pausado', flush=True)
-            serve(s, host='127.0.0.1', port=args.port)
+            host = '127.0.0.1'
+            registry = default_registry(config, args.resume)
+            print(f'Gaea: http://{host}:{args.port} — escolha um experimento', flush=True)
+            experiment = select_experiment(registry, host=host, port=args.port)
+            simulation = experiment.simulation_factory()
+            print(f'Gaea — {experiment.name}: http://{host}:{args.port} — inicia pausado', flush=True)
+            experiment.interface_factory(simulation, host=host, port=args.port)
         elif args.mode == 'run':
             print(json.dumps(run_experiment(config, args.ticks, args.output, args.sample_every,
                 args.events, args.checkpoint, args.resume), indent=2))
