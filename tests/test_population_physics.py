@@ -39,7 +39,10 @@ def test_ingestion_requires_an_action_and_failure_is_experienced():
     assert a.body.hunger == 40
     assert obj.uid not in s.objects
     s.step({a.uid: population.Action('ingest', target=obj.uid)})
-    assert a.memory.experiences[-1].success is False
+    experience = a.memory.experiences[-1]
+    assert experience.action == 'ingest'
+    assert experience.occurrence.target is None
+    assert experience.changes == ()
 
 
 def test_ground_object_interaction_requires_base_nose_target_alignment():
@@ -106,7 +109,7 @@ def test_observation_has_visible_action_but_never_other_body_delta():
     s.step({a.uid: population.Action('wait'), b.uid: population.Action('ingest', target=obj.uid)})
     observed = [e for e in a.memory.experiences if e.source == 'observed']
     assert observed and observed[-1].action == 'ingest'
-    assert observed[-1].delta is None
+    assert not any(change.subject[0] == 'internal' for change in observed[-1].changes)
     assert observed[-1].actor == b.uid
 
 
@@ -254,6 +257,7 @@ def test_self_manipulation_experience_keeps_target_material_and_terrain_context(
 
     assert experience.action == "pick"
     assert experience.target == obj.uid
-    assert experience.signature == obj.appearance
-    assert experience.visible_change == ("changed",)
-    assert experience.context
+    assert experience.occurrence.target.appearance == obj.appearance
+    assert any(change.attribute == 'relation' and change.after == 'carried'
+               for change in experience.changes)
+    assert experience.before.terrain
