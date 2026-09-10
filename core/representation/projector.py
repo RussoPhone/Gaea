@@ -102,6 +102,9 @@ class RepresentationProjector:
                 else log_record(self._simulation, agent))
         elif layer == 'agent':
             result = self.agent(identifier)
+            agent = self._simulation.agents.get(identifier)
+            if result is not None and agent is not None and hasattr(self._simulation, 'field_of_view'):
+                result['vision'] = self._simulation.field_of_view(agent)
         elif layer == 'object':
             result = self.object(identifier)
         elif layer == 'terrain':

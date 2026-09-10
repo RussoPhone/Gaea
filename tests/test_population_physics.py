@@ -27,6 +27,26 @@ def test_sensor_never_receives_hidden_effects_and_walls_occlude():
     assert all(not hasattr(o, 'body') for o in view.items)
 
 
+def test_field_of_view_matches_perceived_terrain_and_respects_occlusion():
+    s = arena()
+    a = s.spawn(4, 3)
+    a.orientation = (1, 0)
+    from core.ambient.tile import STONE
+    s.world.set_tile(6, 3, STONE)
+
+    fov = s.field_of_view(a)
+    cells = {tuple(cell) for cell in fov}
+    perceived = {(a.x + o.dx, a.y + o.dy) for o in s.perceive(a).terrain}
+
+    assert cells == perceived
+    assert all(isinstance(cell, list) and len(cell) == 2 for cell in fov)
+    assert [a.x, a.y] in fov                       # own cell is always in view
+    assert (6, 3) in cells                         # the blocking wall itself is seen
+    assert (7, 3) not in cells                     # but nothing behind it
+    assert (1, 3) not in cells                     # nor the half plane behind the body
+    assert s.field_of_view(a) == fov and s.tick == 0  # pure: repeatable, no advance
+
+
 def test_ingestion_requires_an_action_and_failure_is_experienced():
     s = arena()
     a = s.spawn(2, 3, micro_position=(8, 10))

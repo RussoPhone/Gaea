@@ -72,6 +72,17 @@ def test_projection_returns_detached_records_and_does_not_call_runtime_snapshot(
     assert p.bootstrap()['terrain']
 
 
+def test_agent_summary_detail_carries_the_field_of_view():
+    s = simulation()
+    a = next(iter(s.agents.values()))
+    detail = RepresentationProjector(s).detail('agent', a.uid)['detail']
+    assert detail['vision'] == s.field_of_view(a)
+    assert [a.x, a.y] in detail['vision']
+    # Frames stay lean: vision is a per-selection cost, never broadcast.
+    assert 'vision' not in RepresentationProjector(s).frame()['agents'][0]
+    assert RepresentationProjector(s).detail('agent', -123)['detail'] is None
+
+
 def test_revisions_change_only_for_static_world_or_session_changes():
     s = simulation()
     p = RepresentationProjector(s)

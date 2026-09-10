@@ -95,6 +95,15 @@ kbd { font: inherit; font-size: 10px; color: #858d79; margin-left: 6px; }
   border: 1px solid #484f40; background: #252b23; color: var(--dark-surface-ink); font-size: 11px;
 }
 .collision-control input { margin: 0; accent-color: #9d9074; }
+.seed-control {
+  display: flex; align-items: center; gap: 6px; min-height: 27px; padding: 4px 8px;
+  border: 1px solid #484f40; background: #252b23; color: var(--dark-surface-ink); font-size: 11px;
+}
+.seed-control input {
+  width: 84px; margin: 0; padding: 2px 4px; font-size: 11px;
+  background: #1b1f19; color: var(--dark-surface-ink); border: 1px solid #484f40;
+}
+.seed-control button { font-size: 11px; }
 #map-key { position: relative; }
 #map-key > summary { cursor: pointer; border: 1px solid var(--line); min-height: 27px; list-style: none; }
 #map-key > summary::before { content: '+ '; color: var(--muted); }

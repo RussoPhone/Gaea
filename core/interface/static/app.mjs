@@ -12,7 +12,7 @@ import { parseTickRate } from './control-values.mjs';
 const $=id=>document.getElementById(id),canvas=$('world-canvas');
 const transport=new ObserverTransport(),store=new SimulationStore();
 const ui={camera:null,selection:null,cell:null,detail:null,following:false,
-  tab:'summary',reading:null,readingLoading:false,readingError:'',showCollisions:false};
+  tab:'summary',reading:null,readingLoading:false,readingError:'',showCollisions:false,showVision:false};
 let readingRequest=0;
 let renderer,snapshotAt=0,dirty=true,pollQueued=false,controlBusy=false;
 let tail=Promise.resolve(),timer=null;
@@ -28,6 +28,10 @@ function paintKey(){
   }
 }
 function resetReading(){readingRequest++;ui.tab='summary';ui.reading=null;ui.readingLoading=false;ui.readingError='';}
+function visionCells(){
+  if(!ui.showVision||!Array.isArray(ui.detail?.vision))return null;
+  return resolveSelection(store.scene,ui.selection)?.layer==='agent'?ui.detail.vision:null;
+}
 function clearSelection(){ui.selection=null;ui.cell=null;ui.detail=null;ui.following=false;resetReading();chrome();dirty=true;}
 function chrome(forceSpeed=false){
   const scene=store.scene;if(!scene)return;
@@ -202,6 +206,15 @@ for(const button of document.querySelectorAll('[data-tab]')){
 }
 $('follow-agent').onclick=()=>{ui.following=!ui.following;const a=resolveSelection(store.scene,ui.selection);if(a&&ui.following)ui.camera=centerCameraOn(ui.camera,a.x,a.y,viewport());chrome();dirty=true;};
 $('show-collisions').onchange=e=>{ui.showCollisions=e.target.checked;dirty=true;};
+$('show-vision').onchange=e=>{ui.showVision=e.target.checked;dirty=true;if(e.target.checked)poll();};
+$('seed-form').onsubmit=e=>{
+  e.preventDefault();
+  const raw=$('seed-value').value.trim();
+  const value=raw===''?Math.floor(Math.random()*2147483648):Number(raw);
+  if(!Number.isInteger(value)||value<0||value>2147483647){error('Semente deve ser um inteiro entre 0 e 2147483647.');return;}
+  $('seed-value').value=String(value);
+  control('regenerate',value);
+};
 $('run-button').onclick=()=>control('run');
 $('pause-button').onclick=()=>control('pause');
 $('step-button').onclick=()=>control('step');
@@ -229,7 +242,7 @@ function draw(now){
   const p=reducedMotion.matches?1:Math.min(1,(now-snapshotAt)/150);
   if(renderer&&ui.camera&&store.scene&&(dirty||p<1)){
     renderer.render(store.scene,ui.camera,{selection:ui.selection,previous:store.previous,
-      motionProgress:p,showCollisions:ui.showCollisions});
+      motionProgress:p,showCollisions:ui.showCollisions,vision:visionCells()});
     $('map-scale').textContent=`1 célula · ${Math.round(ui.camera.cell)} px`;
     dirty=p<1;
   }

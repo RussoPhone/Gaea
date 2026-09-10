@@ -239,8 +239,12 @@ class PopulationSimulation:
         except KeyError:
             return ()
 
-    def perceive(self, a):
-        items, terrain = [], []
+    def _visible_cells(self, a):
+        """Yield (x, y, dx, dy) for every world cell the agent currently perceives.
+
+        Contact in every direction; distance vision only in the forward half plane,
+        with blocking terrain occluding the ray. Pure: no records, RNG or mutation.
+        """
         reach = self.config.sensor_range
         for dy in range(-reach, reach+1):
             for dx in range(-reach+abs(dy), reach-abs(dy)+1):
@@ -252,20 +256,29 @@ class PopulationSimulation:
                     continue
                 if not self._line_clear(a.x, a.y, x, y):
                     continue
-                tile = self.world.get_tile(x, y)
-                terrain.append(Observation(-1, tile.appearance, dx, dy, tile.blocking))
-                for uid in sorted(self.object_cells.get((x, y), ())):
-                    obj = self.objects[uid]
-                    shape = self._shape_seen(a, "object", uid)
-                    if shape:
-                        items.append(Observation(uid, obj.appearance, dx, dy, shape=shape))
-                for other in self.world.get_entities_at(x, y):
-                    if other is a:
-                        continue
-                    signal = other.signal if self.tick-other.signal_tick <= 2 else None
-                    items.append(Observation(other.uid, other.appearance, dx, dy, True,
-                                             other.motion, other.last_action, signal,
-                                             shape=self._shape_seen(a, "agent", other.uid)))
+                yield x, y, dx, dy
+
+    def field_of_view(self, a):
+        """Read-only list of [x, y] world cells visible to the agent, near to far."""
+        return [[x, y] for x, y, _, _ in self._visible_cells(a)]
+
+    def perceive(self, a):
+        items, terrain = [], []
+        for x, y, dx, dy in self._visible_cells(a):
+            tile = self.world.get_tile(x, y)
+            terrain.append(Observation(-1, tile.appearance, dx, dy, tile.blocking))
+            for uid in sorted(self.object_cells.get((x, y), ())):
+                obj = self.objects[uid]
+                shape = self._shape_seen(a, "object", uid)
+                if shape:
+                    items.append(Observation(uid, obj.appearance, dx, dy, shape=shape))
+            for other in self.world.get_entities_at(x, y):
+                if other is a:
+                    continue
+                signal = other.signal if self.tick-other.signal_tick <= 2 else None
+                items.append(Observation(other.uid, other.appearance, dx, dy, True,
+                                         other.motion, other.last_action, signal,
+                                         shape=self._shape_seen(a, "agent", other.uid)))
         visible_tokens = {o.token for o in items}
         for i, item in enumerate(items):
             other = self.agents.get(item.token)

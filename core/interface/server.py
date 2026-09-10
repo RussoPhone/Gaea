@@ -14,6 +14,7 @@ import re
 import socket
 import threading
 import time
+from dataclasses import is_dataclass, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -157,6 +158,8 @@ class SimulationController:
                     )
                 self._speed = speed
                 self._condition.notify_all()
+            elif command == "regenerate":
+                return self._regenerate(value)
             else:
                 raise ControlError("comando inválido")
 
@@ -164,6 +167,37 @@ class SimulationController:
                 "tick": self.simulation.tick,
                 "control": self._state_unlocked(),
             }
+
+    def _regenerate(self, seed_value):
+        """Replace the running world with a fresh one, optionally reseeded.
+
+        Caller holds the condition. The current config is reused verbatim except
+        for the seed, so dimensions and populations stay put across a new draw.
+        """
+        config = getattr(self.simulation, "config", None)
+        if not is_dataclass(config) or isinstance(config, type):
+            raise ControlError("esta simulação não permite gerar um novo mundo")
+        overrides = {}
+        if seed_value is not None:
+            seed = _number(seed_value, "value")
+            if not seed.is_integer() or not 0 <= seed <= 2**31 - 1:
+                raise ControlError("seed deve ser inteiro entre 0 e 2147483647")
+            overrides["seed"] = int(seed)
+        try:
+            fresh = type(self.simulation)(replace(config, **overrides))
+        except (ValueError, TypeError) as exc:
+            raise ControlError(f"configuração inválida: {exc}") from exc
+        self.simulation = fresh
+        self._projector = None
+        self._running = False
+        self._remaining = 0
+        self._worker_error = None
+        self._condition.notify_all()
+        return {
+            "tick": fresh.tick,
+            "seed": getattr(fresh.config, "seed", None),
+            "control": self._state_unlocked(),
+        }
 
     def representation(self, resource, layer=None, identifier=None, section='summary'):
         with self._condition:

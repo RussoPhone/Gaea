@@ -406,6 +406,68 @@ def test_comando_rejeita_origin_externo_sem_alterar_estado():
         assert simulation.tick == 0
 
 
+def test_regenerate_reseeds_a_fresh_world_and_resets_the_clock():
+    config = PopulationConfig(width=10, height=8, population=4, objects=12, stones=2)
+    simulation = PopulationSimulation(config)
+    with running_server(simulation) as server:
+        _, before = request(server, "GET", "/api/bootstrap")
+        request(server, "POST", "/api/control", {"command": "step"})
+
+        status, result = request(
+            server, "POST", "/api/control", {"command": "regenerate", "value": 99}
+        )
+        assert status == 200
+        assert result == {
+            "tick": 0,
+            "seed": 99,
+            "control": {"running": False, "speed": 20.0, "remaining": 0},
+        }
+
+        fresh = server.controller.simulation
+        assert fresh is not simulation
+        assert fresh.config.seed == 99
+        assert (fresh.config.width, fresh.config.population) == (10, 4)
+
+        _, after = request(server, "GET", "/api/bootstrap")
+        assert after["tick"] == 0
+        assert after["worldRevision"] != before["worldRevision"]
+        assert after["config"]["seed"] == 99
+        # A different draw: agent placement no longer coincides.
+        assert [a["x"] for a in after["agents"]] != [a["x"] for a in before["agents"]]
+
+
+def test_regenerate_without_seed_redraws_with_the_same_seed():
+    simulation = PopulationSimulation(PopulationConfig(population=3, objects=8, stones=1))
+    with running_server(simulation) as server:
+        status, result = request(
+            server, "POST", "/api/control", {"command": "regenerate"}
+        )
+        assert status == 200
+        assert result["seed"] == simulation.config.seed
+        assert server.controller.simulation is not simulation
+
+
+@pytest.mark.parametrize("value", [-1, 2**31, 1.5, "42"])
+def test_regenerate_rejects_invalid_seeds_and_keeps_the_world(value):
+    simulation = PopulationSimulation(PopulationConfig(population=3, objects=8, stones=1))
+    with running_server(simulation) as server:
+        status, error = request(
+            server, "POST", "/api/control", {"command": "regenerate", "value": value}
+        )
+        assert status == 400
+        assert set(error) == {"error"}
+        assert server.controller.simulation is simulation
+
+
+def test_regenerate_needs_a_dataclass_config():
+    with running_server(MinimalSimulation()) as server:
+        status, error = request(
+            server, "POST", "/api/control", {"command": "regenerate", "value": 1}
+        )
+        assert status == 400
+        assert "novo mundo" in error["error"]
+
+
 def test_encerramento_para_worker():
     simulation = MinimalSimulation()
     server = create_server(simulation, port=0)

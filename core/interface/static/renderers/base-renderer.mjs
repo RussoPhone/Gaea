@@ -29,6 +29,16 @@ export class BaseRenderer {
     for(let y=b.top;y<=b.bottom;y++)for(let x=b.left;x<=b.right;x++) {
       for(const item of cellRecords(scene,x,y))if(item.layer==='terrain')this.tile(item,camera);
     }
+    if(options.vision?.length){
+      ctx.save();
+      ctx.fillStyle='rgba(95, 126, 131, 0.24)';
+      for(const cell of options.vision){
+        const vx=cell[0],vy=cell[1];
+        if(vx<b.left||vx>b.right||vy<b.top||vy>b.bottom)continue;
+        ctx.fillRect(camera.offsetX+vx*camera.cell,camera.offsetY+vy*camera.cell,camera.cell,camera.cell);
+      }
+      ctx.restore();
+    }
     for(const item of scene.objects.filter(within))this.object(item,camera,
       cellRecords(scene,item.x,item.y).filter(i=>i.layer==='object'));
     const old=new Map((options.previous?.agents || []).map(a=>[a.id,a]));
